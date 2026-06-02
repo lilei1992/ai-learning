@@ -18,6 +18,30 @@
 | Standard Mode（标准模式） | 45 分钟 | 普通工作日，完成概念学习、笔记和自测 |
 | Deep Mode（深度模式） | 90 分钟 | 周末或空闲晚上，补图、伪代码和复盘 |
 
+## 学习法执行方式
+
+配套学习法见：[`../ai-agent-runtime-learning-method.md`](../ai-agent-runtime-learning-method.md)。
+
+每天不要只阅读材料，按下面的闭环推进：
+
+```text
+预习问题
+-> 阅读核心内容
+-> 主动回忆
+-> 费曼输出
+-> Java / 后端类比
+-> 小练习
+-> 间隔复习登记
+```
+
+最低完成标准：
+
+- Busy Mode：写 3 条要点 + 1 个还没想清楚的问题。
+- Standard Mode：补充主动回忆、费曼输出、Java / 后端类比。
+- Deep Mode：额外完成图、伪代码、接口草图或检查清单。
+
+建议从 Day 03 开始，在每天文件底部“今日笔记”中补充学习法小节。Day 01 和 Day 02 如果已有笔记，不强行重写，只追加缺失内容。
+
 ## 周目录
 
 | 周次 | 主题 | 目录 | 学习目标 |
@@ -91,4 +115,3 @@
 | Day 54 | Week 8 | Human Experience（人机协作体验） | [`day-54-human-experience.md`](week-08-evaluation-engineering/day-54-human-experience.md) |
 | Day 55 | Week 8 | Design Your Own Agent Runtime（设计自己的 Agent Runtime） | [`day-55-design-your-own-agent-runtime.md`](week-08-evaluation-engineering/day-55-design-your-own-agent-runtime.md) |
 | Day 56 | Week 8 | 最终复盘与下一阶段计划 | [`day-56-final-review-next-stage.md`](week-08-evaluation-engineering/day-56-final-review-next-stage.md) |
-
