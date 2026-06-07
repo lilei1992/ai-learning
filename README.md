@@ -9,6 +9,7 @@
 - `ai-agent-runtime-daily-goals.md`：56 天每日学习目标汇总版。
 - `ai memory/`：AI memory 相关学习笔记。
 - `claude code/`：Claude Code 相关学习笔记。
+- `trade-system-engineering/`：交易系统工程能力学习计划，覆盖业务建模、系统链路和 AI 协作。
 
 ## 学习方式
 
