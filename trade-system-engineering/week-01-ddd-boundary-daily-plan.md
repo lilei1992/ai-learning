@@ -2,6 +2,7 @@
 
 > 周目标：建立 MoreTickets 的交易系统全景图，分清主业务域、跨域协作方式、写链路、读链路和异步副作用边界。
 > 最终产出：一张业务域关系图、一份模块边界检查清单、一份 AI 协作任务描述模板。
+> 配套答案：[`week-01-ddd-boundary-answers.md`](week-01-ddd-boundary-answers.md)
 
 ## 本周学习原则
 
