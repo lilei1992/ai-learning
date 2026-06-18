@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Codex owl guardian icon</title>
+  <desc id="desc">Guardian-style owl icon for review and quality gates.</desc>
+  <rect width="128" height="128" rx="28" fill="#EFF6FF"/>
+  <path d="M30 51c0-19 15-34 34-34s34 15 34 34v22c0 22-15 39-34 39S30 95 30 73Z" fill="#1D4ED8"/>
+  <path d="M34 36 22 23l3 28Z" fill="#2563EB"/>
+  <path d="M94 36 106 23l-3 28Z" fill="#2563EB"/>
+  <circle cx="50" cy="58" r="18" fill="#DBEAFE"/>
+  <circle cx="78" cy="58" r="18" fill="#DBEAFE"/>
+  <circle cx="50" cy="58" r="7" fill="#172033"/>
+  <circle cx="78" cy="58" r="7" fill="#172033"/>
+  <path d="M64 68 53 82h22Z" fill="#F59E0B"/>
+  <path d="M45 92h38" stroke="#DBEAFE" stroke-width="6" stroke-linecap="round"/>
+  <path d="M52 101h24" stroke="#DBEAFE" stroke-width="6" stroke-linecap="round"/>
+  <path d="M41 39c7-8 16-12 23-12s16 4 23 12" fill="none" stroke="#BFDBFE" stroke-width="6" stroke-linecap="round"/>
+</svg>

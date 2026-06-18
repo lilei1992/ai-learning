@@ -1,0 +1,814 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Code 架构深度分享 - Reveal.js 实时演示版 v2</title>
+  <link rel="stylesheet" href="./vendor/reveal/dist/reveal.css">
+  <link rel="stylesheet" href="./vendor/reveal/dist/black.css">
+  <link rel="stylesheet" href="./styles.css?v=20260528-density-6">
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+
+    <section class="cover native-cover" data-source-slide="s0" data-part="1/1">
+      <div class="hero-native"><div class="hero-tag">Architecture Deep Dive · 2026</div>
+    <h1>Claude Code<br><span>源码解析与架构设计</span></h1>
+    <div class="hero-sub">
+      基于 v2.1.88 源码分析 · 512K 行 TypeScript · 4600+ 文件<br>
+      从一次 npm source map 泄露，窥见 Anthropic 生产级 AI Agent 的完整设计
+    </div>
+    <div class="hero-pills">
+      <span class="pill pill-blue">Agentic Loop（智能体主循环）</span>
+      <span class="pill pill-green">Context Compaction（上下文压缩）</span>
+      <span class="pill pill-orange">Permission System（权限系统）</span>
+      <span class="pill pill-purple">Multi-Agent（多智能体）</span>
+      <span class="pill pill-yellow">MCP Protocol（模型上下文协议）</span>
+    </div></div>
+    </section>
+
+    <section class="native-slide data-slide" data-source-slide="s1" data-part="1/2">
+      <h2>这一切是怎么开始的？</h2>
+      <div class="native-content">
+        <div class="stat-row">
+              <div class="stat-card">
+                <div class="stat-num" style="color:var(--accent)">512K</div>
+                <div class="stat-label">行 TypeScript 源码</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-num" style="color:var(--accent2)">4,600+</div>
+                <div class="stat-label">源文件数</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-num" style="color:var(--accent3)">279</div>
+                <div class="stat-label">官方"开源"文件数</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-num" style="color:var(--accent4)">50+</div>
+                <div class="stat-label">内置工具</div>
+              </div>
+            </div>
+        
+            <div class="callout callout-orange">
+              <strong>2026年3月31日</strong>：安全研究员 Chaofan Shou 发现 npm 包中遗留了 <code>.map</code> source map 调试文件。
+              这些文件映射了完整 TypeScript 源码——不是 hack，只是构建流程一个配置疏忽。
+              Reddit r/LocalLLaMA 社区在几小时内完成了全量解析。
+            </div>
+      </div>
+    </section>
+
+    <section class="native-slide data-slide" data-source-slide="s1" data-part="2/2">
+      <h2>这一切是怎么开始的？</h2>
+      <div class="native-content">
+        <h3>官方"开源"与实际源码的差距</h3>
+            <table class="cmp-table">
+              <thead><tr>
+                <th>模块</th><th>官方 GitHub (279文件)</th><th>泄露源码 (4600+文件)</th>
+              </tr></thead>
+              <tbody>
+                <tr><td class="col-key">核心引擎</td><td>❌ 未包含</td><td>✅ 完整</td></tr>
+                <tr><td class="col-key">Agentic Loop（智能体主循环）</td><td>❌ 未包含</td><td>✅ query.ts 1729行</td></tr>
+                <tr><td class="col-key">权限系统</td><td>❌ 未包含</td><td>✅ permissions.ts 52K</td></tr>
+                <tr><td class="col-key">MCP 客户端</td><td>❌ 未包含</td><td>✅ client.ts 119K</td></tr>
+                <tr><td class="col-key">工具实现</td><td>❌ 未包含</td><td>✅ Bash/Read/Write/Edit…</td></tr>
+                <tr><td class="col-key">协议许可</td><td>Anthropic 商业 ToS</td><td>专有商业代码</td></tr>
+              </tbody>
+            </table>
+      </div>
+    </section>
+
+    <section class="native-slide table-slide" data-source-slide="s2" data-part="1/1">
+      <h2>技术栈选型 & 设计决策</h2>
+      <div class="native-content">
+        <table class="cmp-table">
+              <thead><tr><th>层次</th><th>技术选型</th><th>为什么这样选？</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td class="col-key">运行时</td>
+                  <td><strong>Bun</strong></td>
+                  <td>比 Node.js 启动更快，原生 TypeScript 支持，<code>feature()</code> API 实现构建时 dead code 消除</td>
+                </tr>
+                <tr>
+                  <td class="col-key">语言</td>
+                  <td><strong>TypeScript strict</strong></td>
+                  <td>4600+ 文件规模下，类型安全不是选项而是必须</td>
+                </tr>
+                <tr>
+                  <td class="col-key">Terminal UI</td>
+                  <td><strong>React 18 + Ink</strong></td>
+                  <td>权限对话框、进度条、多面板布局——终端 UI 足够复杂，React 组件模型合理</td>
+                </tr>
+                <tr>
+                  <td class="col-key">API 客户端</td>
+                  <td><strong>@anthropic-ai/sdk</strong></td>
+                  <td>官方 SDK，支持流式输出</td>
+                </tr>
+                <tr>
+                  <td class="col-key">工具扩展</td>
+                  <td><strong>MCP SDK</strong></td>
+                  <td>标准化 LLM 与外部工具通信协议</td>
+                </tr>
+                <tr>
+                  <td class="col-key">Feature Flag（功能开关）</td>
+                  <td><strong>GrowthBook</strong></td>
+                  <td>服务端 A/B 测试 + 安全 kill switch，未发布功能门控</td>
+                </tr>
+              </tbody>
+            </table>
+        
+            <div class="callout callout-blue" style="margin-top:20px">
+              <strong>Java 类比：</strong>Bun ≈ GraalVM Native Image（快启动）；React/Ink ≈ JavaFX 但跑在终端；GrowthBook ≈ LaunchDarkly；TypeScript strict ≈ Java + Lombok + Bean Validation 一起用
+            </div>
+      </div>
+    </section>
+
+    <section class="native-slide architecture-slide" data-source-slide="s3" data-part="1/1">
+      <h2>五层架构总览</h2>
+      <div class="native-content">
+        <div class="layer-stack">
+              <div class="layer layer-purple">
+                <div class="layer-icon">SURFACE</div>
+                <div>
+                  <div class="layer-name" style="color:var(--accent4)">表现层 — 入口与渲染</div>
+                  <div class="layer-desc">cli.tsx · mcp.ts · SDK server · daemon/bridge/ssh · React 18 + Ink TUI · App.tsx + REPL.tsx</div>
+                </div>
+              </div>
+              <div class="layer-arrow">↓</div>
+              <div class="layer layer-green">
+                <div class="layer-icon">CORE</div>
+                <div>
+                  <div class="layer-name" style="color:var(--accent2)">核心层 — Agent Loop 主循环</div>
+                  <div class="layer-desc">query.ts (1729行 while-true) · Async Generator（异步生成器） · 流式 API 调用 · Compaction Pipeline</div>
+                </div>
+              </div>
+              <div class="layer-arrow">↓</div>
+              <div class="layer layer-orange">
+                <div class="layer-icon">SAFETY</div>
+                <div>
+                  <div class="layer-name" style="color:var(--accent3)">安全/动作层 — 权限与工具</div>
+                  <div class="layer-desc">Permission System（权限系统） · PreToolUse Hook · Rule Evaluator · Shell Sandbox · SubAgent 隔离</div>
+                </div>
+              </div>
+              <div class="layer-arrow">↓</div>
+              <div class="layer layer-blue">
+                <div class="layer-icon">STATE</div>
+                <div>
+                  <div class="layer-name" style="color:var(--accent)">状态层 — 上下文与记忆</div>
+                  <div class="layer-desc">Context Assembly · CLAUDE.md Hierarchy · Session Persistence (JSONL) · Sidechain Transcripts · Auto Memory</div>
+                </div>
+              </div>
+              <div class="layer-arrow">↓</div>
+              <div class="layer layer-gray">
+                <div class="layer-icon">BACKEND</div>
+                <div>
+                  <div class="layer-name" style="color:var(--muted)">后端层 — 执行引擎与外部资源</div>
+                  <div class="layer-desc">Claude API · MCP Servers · Bash/Shell · File System · Web Fetch · External Services</div>
+                </div>
+              </div>
+            </div>
+            <div class="callout callout-blue">
+              <strong>核心思想：</strong>确定性基础设施（上下文管理、工具路由、恢复机制）+ 模型判断（LLM 推理）的分离。架构不投资显式规划器或状态图，而是让 LLM 在一个稳定的 harness 内自主决策。
+            </div>
+      </div>
+    </section>
+
+    <section class="native-slide loop-slide dense-slide" data-source-slide="s4" data-part="1/2">
+      <h2>核心：Agentic Loop（智能体主循环） 主循环</h2>
+      <div class="native-content">
+        <div class="two-col">
+              <div>
+                <h3>query.ts 函数签名</h3>
+                <pre><span class="cm">// 1729行的心脏 —— Async Generator（异步生成器）</span>
+        <span class="kw">export async function</span>* <span class="fn">query</span>(
+          params: <span class="ty">QueryParams</span>,
+        ): <span class="ty">AsyncGenerator</span>&lt;
+          | <span class="ty">StreamEvent</span>
+          | <span class="ty">RequestStartEvent</span>
+          | <span class="ty">Message</span>
+          | <span class="ty">TombstoneMessage</span>
+          | <span class="ty">ToolUseSummaryMessage</span>,
+          <span class="ty">Terminal</span>  <span class="cm">// return: 终止原因</span>
+        &gt;</pre>
+                <div class="callout callout-green" style="font-size:12px">
+                  <strong>为什么 Async Generator（异步生成器）？</strong> 把流式事件、正常终止、错误传播统一在单一函数里。Java 类比：<code>Flux&lt;T&gt;</code>（Reactor），但用语言原生语法，无需框架。
+                </div>
+              </div>
+              <div>
+                <h3>不可变参数 vs 可变状态</h3>
+                <pre><span class="cm">// 不可变参数 (整个循环不变)</span>
+        <span class="kw">type</span> <span class="ty">QueryParams</span> = {
+          messages: <span class="ty">Message</span>[]
+          systemPrompt: <span class="ty">SystemPrompt</span>
+          canUseTool: <span class="ty">CanUseToolFn</span>
+          maxTurns?: <span class="ty">number</span>
+        }
+        
+        <span class="cm">// 可变状态 (每次迭代更新)</span>
+        <span class="kw">type</span> <span class="ty">State</span> = {
+          messages: <span class="ty">Message</span>[]
+          turnCount: <span class="ty">number</span>
+          transition: <span class="ty">Continue</span> | <span class="kw">undefined</span>
+          <span class="cm">// ...</span>
+        }
+        
+        <span class="cm">// Continue Site 模式 — 原子替换</span>
+        state = { ...state,
+          messages: newMessages,
+          turnCount: nextTurnCount,
+          transition: { reason: <span class="str">'next_turn'</span> }
+        }</pre>
+              </div>
+            </div>
+      </div>
+    </section>
+
+    <section class="native-slide loop-slide dense-slide" data-source-slide="s4" data-part="2/2">
+      <h2>核心：Agentic Loop（智能体主循环） 主循环</h2>
+      <div class="native-content">
+        <h3>每个 Turn 的 6 阶段流水线</h3>
+            <div class="timeline">
+              <div class="tl-item tl-blue">
+                <div class="tl-dot">1</div>
+                <div class="tl-body">
+                  <div class="tl-step">Pre-Request Compaction <span class="tag tag-green">cheapest-first</span></div>
+                  <div class="tl-detail">按成本从低到高依次尝试 5 级压缩策略（详见 Slide 06）</div>
+                </div>
+              </div>
+              <div class="tl-item tl-green">
+                <div class="tl-dot">2</div>
+                <div class="tl-body">
+                  <div class="tl-step">API Call & Streaming（流式处理）</div>
+                  <div class="tl-detail">Streaming（流式处理）ToolExecutor：Claude 生成响应的同时并行执行只读工具，isConcurrencySafe 标志控制安全边界</div>
+                </div>
+              </div>
+              <div class="tl-item tl-orange">
+                <div class="tl-dot">3</div>
+                <div class="tl-body">
+                  <div class="tl-step">Tool Authorization Pipeline（工具授权流水线）</div>
+                  <div class="tl-detail">PreFilter → PreToolUse Hook → Rule Evaluation → Permission Handler，每个工具独立鉴权</div>
+                </div>
+              </div>
+              <div class="tl-item tl-purple">
+                <div class="tl-dot">4</div>
+                <div class="tl-body">
+                  <div class="tl-step">Tool Execution & Result Streaming（流式处理）</div>
+                  <div class="tl-detail">并发安全工具并行执行，写操作串行，结果流式回传</div>
+                </div>
+              </div>
+              <div class="tl-item tl-yellow">
+                <div class="tl-dot">5</div>
+                <div class="tl-body">
+                  <div class="tl-step">Recovery Mechanisms</div>
+                  <div class="tl-detail">token 超限自动重试，fallback model 切换，成本感知错误恢复</div>
+                </div>
+              </div>
+              <div class="tl-item tl-gray">
+                <div class="tl-dot">6</div>
+                <div class="tl-body">
+                  <div class="tl-step">Stop Condition Check</div>
+                  <div class="tl-detail">maxTurns、用户中断、模型返回 end_turn、安全拒绝……任一满足则终止循环</div>
+                </div>
+              </div>
+            </div>
+      </div>
+    </section>
+
+    <section class="native-slide tools-slide dense-slide" data-source-slide="s5" data-part="1/2">
+      <h2>工具系统：50+ 工具的设计哲学</h2>
+      <div class="native-content">
+        <div class="merged-tool-classification">
+
+        <h3>工具分类 & 并发安全级别</h3>
+            <div class="tools-grid">
+              <div class="tool-card">
+                <div class="tool-name">FileReadTool</div>
+                <div class="tool-desc">读取文件内容，支持分页</div>
+                <span class="tool-safe safe-ro">✓ concurrency-safe</span>
+              </div>
+              <div class="tool-card">
+                <div class="tool-name">GlobTool</div>
+                <div class="tool-desc">文件系统模式匹配</div>
+                <span class="tool-safe safe-ro">✓ concurrency-safe</span>
+              </div>
+              <div class="tool-card">
+                <div class="tool-name">GrepTool</div>
+                <div class="tool-desc">基于 ripgrep 的内容搜索</div>
+                <span class="tool-safe safe-ro">✓ concurrency-safe</span>
+              </div>
+              <div class="tool-card">
+                <div class="tool-name">FileEditTool</div>
+                <div class="tool-desc">精确字符串替换编辑</div>
+                <span class="tool-safe safe-rw">✗ exclusive</span>
+              </div>
+              <div class="tool-card">
+                <div class="tool-name">FileWriteTool</div>
+                <div class="tool-desc">新建或覆写文件</div>
+                <span class="tool-safe safe-rw">✗ exclusive</span>
+              </div>
+              <div class="tool-card">
+                <div class="tool-name">BashTool</div>
+                <div class="tool-desc">执行 Shell 命令</div>
+                <span class="tool-safe safe-shell">⚠ gated + sandboxed</span>
+              </div>
+              <div class="tool-card">
+                <div class="tool-name">AgentTool</div>
+                <div class="tool-desc">派生子 Agent 委托任务</div>
+                <span class="tool-safe safe-shell">⚠ isolated context</span>
+              </div>
+              <div class="tool-card">
+                <div class="tool-name">WebFetchTool</div>
+                <div class="tool-desc">抓取 URL 内容</div>
+                <span class="tool-safe safe-ro">✓ concurrency-safe</span>
+              </div>
+              <div class="tool-card">
+                <div class="tool-name">MCPTool (dynamic)</div>
+                <div class="tool-desc">MCP Server 动态注册工具</div>
+                <span class="tool-safe safe-shell">⚠ per-server perms</span>
+              </div>
+            </div>
+        </div>
+        <div class="callout callout-orange core-principle-bottom">
+              <strong>核心原则：</strong>每个工具自带 input schema、permission level、execution logic，没有工具间共享的可变状态。BashTool 和 FileReadTool 在同一注册表中，但风险画像完全不同，架构分别对待。
+            </div>
+      </div>
+    </section>
+
+    <section class="native-slide tools-slide dense-slide" data-source-slide="s5" data-part="2/2">
+      <h2>工具系统：50+ 工具的设计哲学</h2>
+      <div class="native-content">
+        <h3>并发安全控制核心逻辑</h3>
+            <pre><span class="cm">// Streaming（流式处理）ToolExecutor.ts</span>
+        <span class="kw">private</span> <span class="fn">canExecuteTool</span>(isConcurrencySafe: <span class="ty">boolean</span>): <span class="ty">boolean</span> {
+          <span class="kw">const</span> executing = <span class="kw">this</span>.tools.filter(t => t.status === <span class="str">'executing'</span>)
+          <span class="kw">return</span> (
+            executing.length === <span class="num">0</span> ||
+            (isConcurrencySafe && executing.every(t => t.isConcurrencySafe))
+          )
+        }</pre>
+            <div class="callout callout-blue">
+              <strong>Java 类比：</strong>ReadWriteLock — 多读一写。只读工具拿 readLock 并发执行，写操作拿 writeLock 独占。但这里的"锁"是运行时调度逻辑，不是 JVM 锁。
+            </div>
+      </div>
+    </section>
+
+    <section class="native-slide compact-slide dense-slide" data-source-slide="s6" data-part="1/2">
+      <h2>Context 压缩管线：LLM 应用的核心挑战</h2>
+      <div class="native-content">
+        <div class="callout callout-orange">
+              <strong>问题本质：</strong>LLM 的 Context Window（上下文窗口） 是有限资源，长对话/大型任务会溢出。所有优化都围绕这个瓶颈展开。对话历史丢失后，客户端还需自行计算剩余 budget 并报给服务端——典型的分布式状态同步难题。
+            </div>
+      </div>
+    </section>
+
+    <section class="native-slide compact-slide dense-slide" data-source-slide="s6" data-part="2/2">
+      <h2>Context 压缩管线：LLM 应用的核心挑战</h2>
+      <div class="native-content">
+        <h3>5 级压缩策略（cheapest-first 执行顺序）</h3>
+            <div class="compact-row">
+              <div class="compact-item">
+                <div class="compact-badge" style="background:rgba(56,217,169,0.12);color:var(--accent2)">Layer 1</div>
+                <div class="compact-info">
+                  <div class="compact-name">Tool Result Budget（工具结果预算）</div>
+                  <div class="compact-desc">截断过大的工具结果（如文件读取返回数千行），保留关键内容</div>
+                </div>
+                <div class="cost-bar"><div class="cost-fill" style="width:10%;background:var(--accent2)"></div></div>
+              </div>
+              <div class="compact-item">
+                <div class="compact-badge" style="background:rgba(79,142,247,0.12);color:var(--accent)">Layer 2</div>
+                <div class="compact-info">
+                  <div class="compact-name">Snip Compact <span class="tag tag-blue">HISTORY_SNIP flag</span></div>
+                  <div class="compact-desc">直接丢弃最旧的消息块——最激进但成本最低</div>
+                </div>
+                <div class="cost-bar"><div class="cost-fill" style="width:20%;background:var(--accent)"></div></div>
+              </div>
+              <div class="compact-item">
+                <div class="compact-badge" style="background:rgba(247,201,79,0.12);color:var(--warn)">Layer 3</div>
+                <div class="compact-info">
+                  <div class="compact-name">Microcompact</div>
+                  <div class="compact-desc">有 Prompt Cache（提示缓存） 感知地选择性清除单个工具结果，避免破坏缓存边界</div>
+                </div>
+                <div class="cost-bar"><div class="cost-fill" style="width:35%;background:var(--warn)"></div></div>
+              </div>
+              <div class="compact-item">
+                <div class="compact-badge" style="background:rgba(201,126,247,0.12);color:var(--accent4)">Layer 4</div>
+                <div class="compact-info">
+                  <div class="compact-name">Context Collapse（上下文折叠） <span class="tag tag-blue">CONTEXT_COLLAPSE flag</span></div>
+                  <div class="compact-desc">分阶段折叠消息块，生成压缩视图但不修改原始数据</div>
+                </div>
+                <div class="cost-bar"><div class="cost-fill" style="width:60%;background:var(--accent4)"></div></div>
+              </div>
+              <div class="compact-item">
+                <div class="compact-badge" style="background:rgba(247,123,79,0.12);color:var(--accent3)">Layer 5</div>
+                <div class="compact-info">
+                  <div class="compact-name">Auto-Compact（自动摘要压缩）（LLM 摘要）</div>
+                  <div class="compact-desc">阈值触发，调用 LLM 对整段对话做摘要——最贵但最有效，Collapse 通过后跳过</div>
+                </div>
+                <div class="cost-bar"><div class="cost-fill" style="width:100%;background:var(--accent3)"></div></div>
+              </div>
+            </div>
+            <div class="callout callout-green" style="margin-top:16px">
+              <strong>关键设计：</strong>Context Collapse（上下文折叠） 必须在 Auto-Compact（自动摘要压缩） 之前执行——若 Collapse 已降至阈值以下，Auto-Compact（自动摘要压缩）（一次 API 调用费用）就不触发，保留细粒度上下文同时省钱。<br><br>
+              <strong>Java GC 类比：</strong>Minor GC (L1-L2) → CMS (L3-L4) → Full GC (L5)，优先走成本最低的路径。
+            </div>
+      </div>
+    </section>
+
+    <section class="native-slide permission-slide" data-source-slide="s7" data-part="1/2">
+      <h2>权限系统：Defense in Depth（纵深防御）</h2>
+      <div class="native-content">
+        <h3>工具调用授权管线（4级）</h3>
+            <div class="timeline" style="margin-bottom:20px">
+              <div class="tl-item tl-blue">
+                <div class="tl-dot">1</div>
+                <div class="tl-body">
+                  <div class="tl-step">Pre-filtering</div>
+                  <div class="tl-detail">按工具名和基础规则快速过滤，不允许的工具根本不进入后续流程</div>
+                </div>
+              </div>
+              <div class="tl-item tl-green">
+                <div class="tl-dot">2</div>
+                <div class="tl-body">
+                  <div class="tl-step">PreToolUse Hook</div>
+                  <div class="tl-detail">用户自定义脚本拦截点，可修改参数、记录日志、拒绝执行</div>
+                </div>
+              </div>
+              <div class="tl-item tl-orange">
+                <div class="tl-dot">3</div>
+                <div class="tl-body">
+                  <div class="tl-step">Rule Evaluation</div>
+                  <div class="tl-detail">匹配 allowList/denyList 规则、路径边界检查、模式匹配</div>
+                </div>
+              </div>
+              <div class="tl-item tl-purple">
+                <div class="tl-dot">4</div>
+                <div class="tl-body">
+                  <div class="tl-step">Permission Handler（人工确认）</div>
+                  <div class="tl-detail">不确定操作弹出 Terminal 对话框请求人工授权，auto-mode 用 ML 分类器决定是否可自动通过</div>
+                </div>
+              </div>
+            </div>
+      </div>
+    </section>
+
+    <section class="native-slide permission-slide" data-source-slide="s7" data-part="2/2">
+      <h2>权限系统：Defense in Depth（纵深防御）</h2>
+      <div class="native-content">
+        <h3>3 种工作模式</h3>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+              <div class="tool-card">
+                <div class="tool-name" style="color:var(--accent2)">Default Mode（默认模式）</div>
+                <div class="tool-desc">每次不确定操作都询问用户，最高控制权，适合敏感操作</div>
+              </div>
+              <div class="tool-card">
+                <div class="tool-name" style="color:var(--warn)">Auto Mode（自动模式）</div>
+                <div class="tool-desc">ML 分类器评估风险，低风险自动执行，高风险仍需确认</div>
+              </div>
+              <div class="tool-card">
+                <div class="tool-name" style="color:var(--accent3)">Headless / CI Mode（无人值守/持续集成模式）</div>
+                <div class="tool-desc">无人值守，依赖预设规则集，适合 CI/CD 流水线</div>
+              </div>
+            </div>
+            <div class="callout callout-blue" style="margin-top:16px">
+              <strong>Java 类比：</strong>Spring Security 的 <code>SecurityFilterChain</code> + 自定义 <code>AccessDecisionVoter</code>，但鉴权对象是"AI 将要执行的动作"而非"HTTP 请求"。Anthropic 的核心信念：<em>Agent 的自主性正是其价值所在，但人类应始终保留对目标追求方式的控制权。</em>
+            </div>
+      </div>
+    </section>
+
+    <section class="native-slide multi-agent-slide" data-source-slide="s8" data-part="1/1">
+      <h2>多 Agent 架构：隔离与委托</h2>
+      <div class="native-content">
+        <div class="two-col">
+              <div>
+                <h3>子 Agent 隔离模型</h3>
+                <ul class="point-list">
+                  <li>独立 file cache（从父 Agent 克隆）</li>
+                  <li>独立 AbortController（异步）或共享（同步）</li>
+                  <li>独立 transcript 记录（JSONL sidechain）</li>
+                  <li>过滤后的工具池（按 Agent 定义限制）</li>
+                  <li>以纯文本形式向父 Agent 返回结果</li>
+                  <li>权限不继承——resume 时不恢复子 Agent 权限</li>
+                </ul>
+                <div class="callout callout-orange" style="margin-top:14px;font-size:12px">
+                  <strong>Java 类比：</strong>Fork/Join 框架，但 worker 是独立的 LLM 实例，通信通道是自然语言而非方法调用返回值。
+                </div>
+              </div>
+              <div>
+                <h3>委托树结构</h3>
+                <div class="agent-tree">
+                  <div class="agent-box" style="background:rgba(79,142,247,0.08);border-color:rgba(79,142,247,0.4)">
+                    <div class="ab-title" style="color:var(--accent)">Orchestrator Agent（编排主智能体）</div>
+                    <div class="ab-sub">主 Agent · 持有完整 context</div>
+                  </div>
+                  <div class="agent-line"></div>
+                  <div class="agent-fork">
+                    <div class="agent-fork-col">
+                      <div class="agent-line"></div>
+                      <div class="agent-box" style="background:rgba(56,217,169,0.08);border-color:rgba(56,217,169,0.35)">
+                        <div class="ab-title" style="color:var(--accent2)">Sub-Agent（子智能体） A</div>
+                        <div class="ab-sub">读取文件<br>独立 context</div>
+                      </div>
+                    </div>
+                    <div class="agent-fork-col">
+                      <div class="agent-line"></div>
+                      <div class="agent-box" style="background:rgba(247,123,79,0.08);border-color:rgba(247,123,79,0.35)">
+                        <div class="ab-title" style="color:var(--accent3)">Sub-Agent（子智能体） B</div>
+                        <div class="ab-sub">运行测试<br>独立 context</div>
+                      </div>
+                    </div>
+                    <div class="agent-fork-col">
+                      <div class="agent-line"></div>
+                      <div class="agent-box" style="background:rgba(201,126,247,0.08);border-color:rgba(201,126,247,0.35)">
+                        <div class="ab-title" style="color:var(--accent4)">Sub-Agent（子智能体） C</div>
+                        <div class="ab-sub">搜索文档<br>独立 context</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="callout callout-green" style="margin-top:14px;font-size:12px">
+                  未发布的 <strong>Coordinator Mode（协调器模式）</strong> (feature flag) 支持多 worker 并行，类似 MapReduce 的 Map 阶段。
+                </div>
+              </div>
+            </div>
+      </div>
+    </section>
+
+    <section class="native-slide extension-slide" data-source-slide="s9" data-part="1/2">
+      <h2>扩展架构：MCP + 四种机制</h2>
+      <div class="native-content">
+        <table class="cmp-table">
+              <thead><tr><th>扩展机制</th><th>类比（Java/Spring）</th><th>作用层次</th><th>典型用途</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td class="col-key">MCP Server</td>
+                  <td>SPI + gRPC/JSON-RPC</td>
+                  <td>进程级隔离</td>
+                  <td>数据库查询、Git 操作、自定义工具注册</td>
+                </tr>
+                <tr>
+                  <td class="col-key">Hooks（钩子机制）</td>
+                  <td>AOP 切面 / Filter</td>
+                  <td>工具生命周期</td>
+                  <td>审计日志、参数验证、安全扫描</td>
+                </tr>
+                <tr>
+                  <td class="col-key">Skills（技能包）</td>
+                  <td>@Configuration 模块</td>
+                  <td>指令/知识</td>
+                  <td>项目规范注入、领域知识复用</td>
+                </tr>
+                <tr>
+                  <td class="col-key">Plugins（插件）</td>
+                  <td>Maven Plugin</td>
+                  <td>能力包</td>
+                  <td>集成第三方服务（Jira、Slack 等）</td>
+                </tr>
+              </tbody>
+            </table>
+      </div>
+    </section>
+
+    <section class="native-slide extension-slide" data-source-slide="s9" data-part="2/2">
+      <h2>扩展架构：MCP + 四种机制</h2>
+      <div class="native-content">
+        <h3>MCP 协议：标准化工具通信</h3>
+            <pre><span class="cm">// MCP Server 工具注册示意</span>
+        {
+          <span class="str">"type"</span>: <span class="str">"web_search_20250305"</span>,
+          <span class="str">"name"</span>: <span class="str">"web_search"</span>,
+          <span class="str">"description"</span>: <span class="str">"Search the web for current info"</span>,
+          <span class="str">"input_schema"</span>: {
+            <span class="str">"type"</span>: <span class="str">"object"</span>,
+            <span class="str">"properties"</span>: {
+              <span class="str">"query"</span>: { <span class="str">"type"</span>: <span class="str">"string"</span> }
+            }
+          }
+        }
+        
+        <span class="cm">// 运行时：JSON-RPC over stdio 或 HTTP SSE</span>
+        <span class="cm">// Claude Code 作为 MCP Client，每个 Server 独立进程</span></pre>
+            <div class="callout callout-blue">
+              <strong>为什么设计 4 种机制而不是 1 种？</strong>它们解决不同层面的扩展需求：MCP 扩展能力边界，Hooks（钩子机制） 扩展控制边界，Skills（技能包） 扩展知识边界，Plugins（插件） 扩展集成边界。强行统一会导致每种场景都被迫用不合适的抽象。
+            </div>
+      </div>
+    </section>
+
+    <section class="native-slide philosophy-slide" data-source-slide="s10" data-part="1/2">
+      <h2>设计哲学：5 个核心价值观 → 13 条设计原则</h2>
+      <div class="native-content">
+        <div class="stat-row" style="grid-template-columns:repeat(5,1fr)">
+              <div class="stat-card" style="border-color:rgba(79,142,247,0.3)">
+                <div style="font-size:20px;margin-bottom:6px">⚖️</div>
+                <div class="stat-label" style="font-size:11px;line-height:1.5">人类决策<br>权威</div>
+              </div>
+              <div class="stat-card" style="border-color:rgba(247,123,79,0.3)">
+                <div style="font-size:20px;margin-bottom:6px">🛡️</div>
+                <div class="stat-label" style="font-size:11px;line-height:1.5">安全性<br>与隐私</div>
+              </div>
+              <div class="stat-card" style="border-color:rgba(56,217,169,0.3)">
+                <div style="font-size:20px;margin-bottom:6px">⚙️</div>
+                <div class="stat-label" style="font-size:11px;line-height:1.5">可靠<br>执行</div>
+              </div>
+              <div class="stat-card" style="border-color:rgba(201,126,247,0.3)">
+                <div style="font-size:20px;margin-bottom:6px">🚀</div>
+                <div class="stat-label" style="font-size:11px;line-height:1.5">能力<br>放大</div>
+              </div>
+              <div class="stat-card" style="border-color:rgba(247,201,79,0.3)">
+                <div style="font-size:20px;margin-bottom:6px">🔄</div>
+                <div class="stat-label" style="font-size:11px;line-height:1.5">上下文<br>适应性</div>
+              </div>
+            </div>
+      </div>
+    </section>
+
+    <section class="native-slide philosophy-slide philosophy-combined" data-source-slide="s10" data-part="2/2">
+      <h2>设计哲学：5 个核心价值观 → 13 条设计原则</h2>
+      <div class="native-content">
+        <h3>三个贯穿全局的架构选择</h3>
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <div class="callout callout-blue">
+                <strong>1. 分级分层（Graduated Layering）：</strong>每个关切（安全、权限、压缩、扩展）都有独立的分级机制，而非单一的单体实现。失败模式被隔离，不同级别可独立演进。
+              </div>
+              <div class="callout callout-green">
+                <strong>2. Append-Only（仅追加） 设计偏好可审计性：</strong>Session transcript 是 JSONL append-only 日志，支持 fork、resume、审计——查询能力换可观测性。类比 Event Sourcing。
+              </div>
+              <div class="callout callout-orange">
+                <strong>3. 确定性 Harness（控制围栏） 内使用模型判断：</strong>架构不构建显式规划器，而是投资稳定的基础设施（context 管理、工具路由、错误恢复），让 LLM 在确定性 harness 内自主决策。
+              </div>
+            </div>
+            <div class="callout callout-blue evidence-callout">
+              <strong>数据佐证：</strong>Anthropic 内部调研 132 名工程师，约 27% 的 Claude Code 辅助任务是"没有这个工具就不会尝试的工作"。架构实现的是质的工作流创新，而非仅仅加速现有流程。
+            </div>
+      </div>
+    </section>
+
+    <section class="native-slide roadmap-slide" data-source-slide="s11" data-part="1/2">
+      <h2>从 Feature Flag（功能开关） 窥见未来路线图</h2>
+      <div class="native-content">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+              <div class="tool-card">
+                <div class="tool-name" style="color:var(--accent4)">Voice Mode（语音模式）</div>
+                <div class="tool-desc">语音输入输出支持，feature flag 已存在但未开放</div>
+                <span class="tool-safe safe-shell">⏳ 开发中</span>
+              </div>
+              <div class="tool-card">
+                <div class="tool-name" style="color:var(--accent3)">Coordinator Mode（协调器模式）</div>
+                <div class="tool-desc">多 Worker 并行协调，类 MapReduce。代号存在于源码</div>
+                <span class="tool-safe safe-shell">⏳ 开发中</span>
+              </div>
+              <div class="tool-card">
+                <div class="tool-name" style="color:var(--accent)">KAIROS Mode（主动感知模式）</div>
+                <div class="tool-desc">主动感知模式，Agent 主动提出任务而非等待指令</div>
+                <span class="tool-safe safe-shell">⏳ 开发中</span>
+              </div>
+            </div>
+      </div>
+    </section>
+
+    <section class="native-slide roadmap-slide" data-source-slide="s11" data-part="2/2">
+      <h2>从 Feature Flag（功能开关） 窥见未来路线图</h2>
+      <div class="native-content">
+        <h3>6 个开放研究方向（学术论文总结）</h3>
+            <ul class="point-list">
+              <li><strong>静默失败与可观测性缺口</strong>——Agent 失败时往往无声，需要更好的追踪和评估框架</li>
+              <li><strong>记忆作为一等公民</strong>——跨 session 的长期记忆目前依赖 CLAUDE.md，需要更系统的解决方案</li>
+              <li><strong>Harness（控制围栏） 边界演化</strong>——在哪里、何时、做什么、与谁协作，边界如何随信任度动态调整</li>
+              <li><strong>架构解耦</strong>——推理、执行、会话三层进一步分离，允许独立扩展和替换</li>
+              <li><strong>治理与监督</strong>——随 Agent 自主性增强，如何在规模上维持人类监督</li>
+              <li><strong>主动架构</strong>——从响应式（等待输入）到主动式（主动感知、规划、行动）的转变</li>
+            </ul>
+      </div>
+    </section>
+
+    <section class="native-slide mapping-slide dense-slide" data-source-slide="s12" data-part="1/1">
+      <h2>Java 开发者参考卡：概念映射</h2>
+      <div class="native-content">
+        <table class="cmp-table">
+              <thead><tr><th>Claude Code 概念</th><th>Java / Spring 生态类比</th><th>本质差异</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td class="col-key">Async Generator（异步生成器） Loop</td>
+                  <td>Project Reactor <code>Flux&lt;T&gt;</code></td>
+                  <td>驱动源是 LLM 输出，而非数据流</td>
+                </tr>
+                <tr>
+                  <td class="col-key">Context Compaction（上下文压缩）</td>
+                  <td>分级 GC (Minor/Major/Full)</td>
+                  <td>"内存"是 token，溢出代价是 API 费用</td>
+                </tr>
+                <tr>
+                  <td class="col-key">Permission Pipeline</td>
+                  <td>SecurityFilterChain + AccessDecisionVoter</td>
+                  <td>鉴权对象是"AI 即将执行的动作"</td>
+                </tr>
+                <tr>
+                  <td class="col-key">isConcurrencySafe</td>
+                  <td>ReadWriteLock</td>
+                  <td>调度逻辑在运行时，不是 JVM 锁</td>
+                </tr>
+                <tr>
+                  <td class="col-key">MCP Server</td>
+                  <td>SPI + JSON-RPC over gRPC</td>
+                  <td>跨进程，通信通道是 stdio 或 HTTP SSE</td>
+                </tr>
+                <tr>
+                  <td class="col-key">Hooks（钩子机制）</td>
+                  <td>@Aspect + @Around</td>
+                  <td>切入的是 LLM 工具调用生命周期</td>
+                </tr>
+                <tr>
+                  <td class="col-key">CLAUDE.md / Skills（技能包）</td>
+                  <td>@Configuration + application.yml</td>
+                  <td>配置对象是 LLM 的行为约束，非 Bean</td>
+                </tr>
+                <tr>
+                  <td class="col-key">Session Transcript (JSONL)</td>
+                  <td>Event Sourcing / Kafka 日志</td>
+                  <td>Append-Only（仅追加），支持 fork/resume/审计</td>
+                </tr>
+                <tr>
+                  <td class="col-key">SubAgent</td>
+                  <td>ForkJoinTask</td>
+                  <td>Worker 是独立 LLM 实例，通信是自然语言</td>
+                </tr>
+                <tr>
+                  <td class="col-key">Continue Site Pattern</td>
+                  <td>React setState / Immutable 对象</td>
+                  <td>状态原子替换，防止中间状态污染</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="callout callout-green" style="margin-top:16px">
+              <strong>核心认知迁移：</strong>传统后端开发，你控制完整的执行流程。Agentic 开发，你构建"围栏"（harness）——确定性的安全边界、工具定义、权限规则，然后让 LLM 在围栏内自主决策。这是思维模式上最大的转变。
+            </div>
+      </div>
+    </section>
+
+    <section class="native-slide resources-slide" data-source-slide="s13" data-part="1/2">
+      <h2>参考资源 & 延伸阅读</h2>
+      <div class="native-content">
+        <div class="two-col">
+              <div>
+                <h3>学术 / 技术报告</h3>
+                <ul class="point-list">
+                  <li><strong>arxiv 2604.14228</strong> — "Dive into Claude Code: The Design Space of Today's and Future AI Agent Systems"（最权威学术分析，含 5 价值观 13 原则框架）</li>
+                  <li><strong>VILA-Lab GitHub</strong> — github.com/VILA-Lab/Dive-into-Claude-Code（配套代码与资源汇总）</li>
+                  <li><strong>DeepWiki</strong> — deepwiki.com/luyao618/Claude-Code-Source-Study（25篇系列深度文章，中文）</li>
+                </ul>
+              </div>
+              <div>
+                <h3>工程博客 / 逆向分析</h3>
+                <ul class="point-list">
+                  <li><strong>bits-bytes-nn.github.io</strong> — Claude Code 架构详解（含 agentic loop、compaction pipeline 源码分析）</li>
+                  <li><strong>WaveSpeed Blog</strong> — 512K 行 TypeScript 完整架构拆解</li>
+                  <li><strong>waiterxiaoyy/Deep-Dive-Claude-Code</strong> — 13章渐进式分析 + 12个可运行 demo</li>
+                  <li><strong>Zain Hasan Blog</strong> — v2.1.88 架构深度解析含 ASCII 架构图</li>
+                </ul>
+              </div>
+            </div>
+      </div>
+    </section>
+
+    <section class="native-slide resources-slide" data-source-slide="s13" data-part="2/2">
+      <h2>参考资源 & 延伸阅读</h2>
+      <div class="native-content">
+        <div class="callout callout-blue">
+              <strong>官方文档入口：</strong><br>
+              Claude Code 使用文档：docs.anthropic.com/en/docs/claude-code/overview<br>
+              Anthropic Agent 设计指南：docs.anthropic.com/en/docs/build-with-claude/agents<br>
+              MCP 协议规范：modelcontextprotocol.io
+            </div>
+            <div style="text-align:center;margin-top:28px;padding:20px;background:var(--surface2);border:1px solid var(--border);border-radius:10px">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);margin-bottom:8px">PREPARED WITH</div>
+              <div style="font-size:16px;font-weight:700">Claude Code 源码解析 · Architecture Deep Dive</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:4px">基于公开学术论文及社区逆向工程分析 · 2026</div>
+            </div>
+      </div>
+    </section>
+
+    <section class="native-slide glossary-slide" data-source-slide="s14" data-part="1/1">
+      <h2>AI Agent 术语速查（中英对照）</h2>
+      <div class="native-content">
+        <table class="cmp-table">
+              <thead>
+                <tr><th>英文术语</th><th>中文解释</th><th>本质含义</th></tr>
+              </thead>
+              <tbody>
+                <tr><td class="col-key">Agentic Loop</td><td>智能体主循环</td><td>AI 持续“思考 → 调工具 → 获取结果 → 再思考”的核心循环</td></tr>
+                <tr><td class="col-key">Context Window</td><td>上下文窗口</td><td>模型一次能看到的最大历史内容</td></tr>
+                <tr><td class="col-key">Compaction</td><td>压缩</td><td>为了节省 Token 成本与窗口空间，对历史进行裁剪或摘要</td></tr>
+                <tr><td class="col-key">Harness</td><td>控制围栏</td><td>约束 AI 行为的确定性基础设施</td></tr>
+                <tr><td class="col-key">Hooks</td><td>钩子机制</td><td>在关键阶段插入自定义逻辑</td></tr>
+                <tr><td class="col-key">MCP</td><td>模型上下文协议</td><td>LLM 与工具/服务通信的标准协议</td></tr>
+                <tr><td class="col-key">Feature Flag</td><td>功能开关</td><td>控制功能是否开启的运行时配置</td></tr>
+              </tbody>
+            </table>
+      </div>
+    </section>
+
+    </div>
+  </div>
+  <script src="./vendor/reveal/dist/reveal.js"></script>
+  <script src="./app.js?v=20260528-density-6"></script>
+</body>
+</html>

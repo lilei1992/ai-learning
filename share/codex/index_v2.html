@@ -1,0 +1,894 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Codex Agent Runtime：架构、记忆与扩展机制</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css">
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --paper: #ffffff;
+      --paper-2: #f9fbfd;
+      --ink: #142033;
+      --text: #334155;
+      --muted: #64748b;
+      --line: #dbe3ee;
+      --line-strong: #bfccd9;
+      --brand: #12677d;
+      --brand-2: #1f8a70;
+      --brand-soft: #e8f5f7;
+      --blue: #2359a8;
+      --amber: #a15c07;
+      --red: #b42318;
+      --green: #217a63;
+      --code: #101828;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      background: var(--bg);
+    }
+
+    .reveal {
+      color: var(--text);
+      font-family: var(--font);
+      letter-spacing: 0;
+      background:
+        radial-gradient(circle at 20% 8%, rgba(18, 103, 125, .12), transparent 300px),
+        radial-gradient(circle at 86% 88%, rgba(31, 138, 112, .12), transparent 320px),
+        linear-gradient(180deg, #f8fafc, #eef3f7);
+    }
+
+    .reveal .slides {
+      text-align: left;
+    }
+
+    .reveal section {
+      height: 100%;
+      padding: 56px 68px;
+      display: flex !important;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .reveal h1,
+    .reveal h2,
+    .reveal h3,
+    .reveal p,
+    .reveal li,
+    .reveal div,
+    .reveal span,
+    .reveal table {
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    .reveal h1 {
+      margin: 0;
+      color: var(--ink);
+      font-size: clamp(56px, 7.2vw, 92px);
+      line-height: 1.04;
+      font-weight: 880;
+    }
+
+    .reveal h2 {
+      margin: 0 0 28px;
+      color: var(--ink);
+      font-size: clamp(38px, 4.8vw, 60px);
+      line-height: 1.08;
+      font-weight: 850;
+    }
+
+    .reveal h3 {
+      margin: 0 0 12px;
+      color: var(--ink);
+      font-size: 24px;
+      line-height: 1.22;
+      font-weight: 820;
+    }
+
+    .reveal p,
+    .reveal li {
+      color: var(--text);
+      font-size: 24px;
+      line-height: 1.48;
+    }
+
+    .reveal ul {
+      margin: 0;
+      padding-left: 1.1em;
+    }
+
+    .reveal li + li {
+      margin-top: 10px;
+    }
+
+    .reveal strong {
+      color: var(--ink);
+      font-weight: 850;
+    }
+
+    .reveal code {
+      font-family: var(--mono);
+    }
+
+    .reveal pre {
+      width: 100%;
+      margin: 0;
+      box-shadow: none;
+    }
+
+    .reveal pre code {
+      max-height: none;
+      padding: 22px 24px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, .12);
+      font-family: var(--mono);
+      font-size: 18px;
+      line-height: 1.56;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 22px;
+      color: var(--brand);
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--brand-2);
+      box-shadow: 0 0 0 6px rgba(31, 138, 112, .12);
+    }
+
+    .hero {
+      overflow: hidden;
+      color: #ecfeff;
+      background:
+        linear-gradient(rgba(255, 255, 255, .07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, .07) 1px, transparent 1px),
+        linear-gradient(135deg, #116179 0%, #0f2235 70%);
+      background-size: 56px 56px, 56px 56px, auto;
+    }
+
+    .hero h1,
+    .hero p {
+      color: #ffffff;
+    }
+
+    .hero .eyebrow {
+      color: #adf1de;
+    }
+
+    .hero-lead {
+      max-width: 930px;
+      margin: 26px 0 0;
+      color: #d5edf1 !important;
+      font-size: 30px !important;
+      line-height: 1.38 !important;
+    }
+
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 32px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 7px 12px;
+      border: 1px solid rgba(255, 255, 255, .28);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .12);
+      color: #f2fbfd;
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      margin: -12px 0 28px;
+      color: var(--muted) !important;
+      font-size: 23px !important;
+      line-height: 1.45 !important;
+      max-width: 920px;
+    }
+
+    .grid-2,
+    .grid-3,
+    .grid-4 {
+      display: grid;
+      gap: 16px;
+    }
+
+    .grid-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .grid-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .grid-4 {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .card {
+      min-width: 0;
+      min-height: 158px;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .82);
+      box-shadow: 0 14px 36px rgba(15, 23, 42, .06);
+    }
+
+    .card.compact {
+      min-height: 118px;
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 19px;
+      line-height: 1.42;
+    }
+
+    .tag {
+      display: inline-flex;
+      margin-bottom: 14px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: var(--brand-soft);
+      color: var(--brand);
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    .big-point {
+      max-width: 980px;
+      margin: 0;
+      color: var(--ink) !important;
+      font-size: clamp(38px, 5vw, 64px) !important;
+      line-height: 1.14 !important;
+      font-weight: 850;
+    }
+
+    .soft {
+      color: var(--muted);
+    }
+
+    .highlight {
+      color: var(--brand);
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      align-items: stretch;
+      margin-top: 12px;
+    }
+
+    .flow-node {
+      position: relative;
+      min-height: 144px;
+      padding: 18px;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      background: #ffffff;
+    }
+
+    .flow-node:not(:last-child)::after {
+      content: ">";
+      position: absolute;
+      top: 50%;
+      right: -11px;
+      z-index: 2;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--brand);
+      color: #ffffff;
+      font: 850 14px/22px var(--mono);
+      text-align: center;
+      transform: translateY(-50%);
+    }
+
+    .flow-node b {
+      display: block;
+      color: var(--ink);
+      font-size: 21px;
+      line-height: 1.25;
+    }
+
+    .flow-node span {
+      display: block;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.42;
+    }
+
+    .layer-stack {
+      display: grid;
+      gap: 10px;
+    }
+
+    .layer {
+      display: grid;
+      grid-template-columns: 190px 1fr;
+      gap: 16px;
+      align-items: center;
+      padding: 15px 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+    }
+
+    .layer b {
+      color: var(--brand);
+      font-family: var(--mono);
+      font-size: 17px;
+    }
+
+    .layer span {
+      color: var(--text);
+      font-size: 21px;
+      line-height: 1.38;
+    }
+
+    .callout {
+      margin-top: 22px;
+      padding: 18px 20px;
+      border-left: 6px solid var(--brand);
+      border-radius: 8px;
+      background: #e8f5f7;
+      color: var(--text);
+      font-size: 23px;
+      line-height: 1.45;
+    }
+
+    .callout.warning {
+      border-left-color: var(--amber);
+      background: #fff6e6;
+    }
+
+    .callout.danger {
+      border-left-color: var(--red);
+      background: #fff1f0;
+    }
+
+    .table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      font-size: 19px;
+    }
+
+    .table th,
+    .table td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      line-height: 1.38;
+    }
+
+    .table th {
+      color: var(--ink);
+      background: #ecf3f7;
+      font-weight: 850;
+    }
+
+    .table tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: .9fr 1.1fr;
+      gap: 30px;
+      align-items: center;
+    }
+
+    .terminal {
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, .12);
+      background: var(--code);
+      box-shadow: 0 22px 50px rgba(15, 23, 42, .2);
+    }
+
+    .terminal-head {
+      display: flex;
+      gap: 8px;
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, .08);
+    }
+
+    .dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: #ff6b6b;
+    }
+
+    .dot:nth-child(2) {
+      background: #ffc857;
+    }
+
+    .dot:nth-child(3) {
+      background: #52d273;
+    }
+
+    .terminal-body {
+      padding: 20px;
+      color: #d9e7f5;
+      font-family: var(--mono);
+      font-size: 18px;
+      line-height: 1.7;
+    }
+
+    .terminal-body .ok {
+      color: #73e2bd;
+    }
+
+    .terminal-body .event {
+      color: #87d7ff;
+    }
+
+    .terminal-body .warn {
+      color: #ffd280;
+    }
+
+    .fs-button {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 20;
+      border: 1px solid rgba(20, 32, 51, .18);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .86);
+      color: var(--ink);
+      cursor: pointer;
+      font: 850 13px/1 var(--font);
+      padding: 9px 12px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, .12);
+    }
+
+    .fs-button:hover {
+      background: #ffffff;
+    }
+
+    .reveal .controls {
+      color: var(--brand);
+    }
+
+    .reveal .progress {
+      color: var(--brand);
+    }
+
+    @media (max-width: 900px) {
+      .reveal section {
+        padding: 34px 26px;
+      }
+
+      .grid-2,
+      .grid-3,
+      .grid-4,
+      .split,
+      .flow {
+        grid-template-columns: 1fr;
+      }
+
+      .flow-node:not(:last-child)::after {
+        top: auto;
+        right: 50%;
+        bottom: -11px;
+        transform: translateX(50%) rotate(90deg);
+      }
+
+      .layer {
+        grid-template-columns: 1fr;
+      }
+
+      .reveal h1 {
+        font-size: 44px;
+      }
+
+      .reveal h2 {
+        font-size: 36px;
+      }
+
+      .reveal p,
+      .reveal li {
+        font-size: 20px;
+      }
+    }
+
+    @media print {
+      .fs-button {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <button class="fs-button" type="button" id="fullscreenBtn">全屏</button>
+
+  <div class="reveal">
+    <div class="slides">
+      <section class="hero">
+        <div class="eyebrow">OpenAI Codex / Technical Sharing</div>
+        <h1>Codex Agent Runtime</h1>
+        <p class="hero-lead">架构、记忆与扩展机制：从“会写代码的模型”到“可审计、可治理、可恢复的工程执行系统”。</p>
+        <div class="meta-row">
+          <span class="pill">Agent Loop</span>
+          <span class="pill">Context Engineering</span>
+          <span class="pill">AGENTS.md / Memories</span>
+          <span class="pill">MCP / Skills / Plugins</span>
+        </div>
+        <aside class="notes">
+          开场定位：不要把 Codex 讲成聊天助手。它更像一个 coding agent runtime，用运行时边界把模型推理变成工程动作。
+        </aside>
+      </section>
+
+      <section>
+        <div class="eyebrow">01 / Background</div>
+        <h2>背景与问题</h2>
+        <p class="subtitle">当模型开始修改代码、运行命令、调用 API，问题就不再只是“回答准不准”。</p>
+        <div class="grid-2">
+          <div class="card"><span class="tag">Context</span><h3>它读到了什么？</h3><p>项目规则、仓库文件、历史、工具说明、权限策略是否完整。</p></div>
+          <div class="card"><span class="tag">Action</span><h3>它能做什么？</h3><p>文件修改、Shell 命令、外部 API、生产操作必须受控。</p></div>
+          <div class="card"><span class="tag">Memory</span><h3>它如何延续？</h3><p>长任务需要恢复、复盘、摘要和经验沉淀。</p></div>
+          <div class="card"><span class="tag">Evidence</span><h3>它怎么证明？</h3><p>diff、测试结果、命令输出、审批记录要可追溯。</p></div>
+        </div>
+      </section>
+
+      <section>
+        <div class="eyebrow">02 / Thesis</div>
+        <p class="big-point">Codex 的核心不是 <span class="soft">“模型会写代码”</span>，而是 <span class="highlight">“模型在工程边界内循环执行任务”</span>。</p>
+        <div class="callout">
+          可靠的 agent 系统 = 模型推理 + 上下文构造 + 工具运行时 + 权限策略 + 状态记录 + 验证闭环。
+        </div>
+      </section>
+
+      <section>
+        <div class="eyebrow">03 / Core Concepts</div>
+        <h2>核心概念</h2>
+        <div class="grid-3">
+          <div class="card compact"><span class="tag">Agent</span><h3>智能体</h3><p>能感知上下文、调用工具、循环执行目标的系统。</p></div>
+          <div class="card compact"><span class="tag">Turn</span><h3>轮次</h3><p>一次用户输入到最终返回的完整执行周期。</p></div>
+          <div class="card compact"><span class="tag">Tool Call</span><h3>工具调用</h3><p>模型提出的结构化动作，执行权交给运行时。</p></div>
+          <div class="card compact"><span class="tag">Harness</span><h3>运行框架</h3><p>连接模型、工具、上下文、安全和状态的核心。</p></div>
+          <div class="card compact"><span class="tag">Rollout</span><h3>执行轨迹</h3><p>完整会话历史，可用于恢复、审计和记忆提炼。</p></div>
+          <div class="card compact"><span class="tag">Context</span><h3>上下文窗口</h3><p>有限资源，决定 agent 能安全理解多少信息。</p></div>
+        </div>
+      </section>
+
+      <section>
+        <div class="eyebrow">04 / Agent Loop</div>
+        <h2>实现原理：Agent Loop</h2>
+        <div class="flow">
+          <div class="flow-node"><b>Build Context</b><span>合并规则、历史、工具、cwd、权限、memories。</span></div>
+          <div class="flow-node"><b>Model Sample</b><span>模型基于完整上下文做下一步推理。</span></div>
+          <div class="flow-node"><b>Tool Calls</b><span>输出 text 或结构化 tool call。</span></div>
+          <div class="flow-node"><b>Execute</b><span>路由、审批、沙箱、执行、捕获输出。</span></div>
+          <div class="flow-node"><b>Record</b><span>结果写回 thread，继续循环或结束。</span></div>
+        </div>
+        <div class="callout warning">
+          关键点：模型不是直接执行动作，模型只提出意图；运行时决定能否执行、如何执行、如何记录。
+        </div>
+      </section>
+
+      <section>
+        <div class="eyebrow">05 / Prompt & Context</div>
+        <h2>上下文构造：质量上限在 Context</h2>
+        <div class="split">
+          <div>
+            <p class="subtitle">Codex 每次推理都把必要状态放进请求中，服务端不依赖隐藏 session。</p>
+            <ul>
+              <li><strong>system</strong>：服务端控制的最高优先级指令</li>
+              <li><strong>tools</strong>：模型可见工具定义</li>
+              <li><strong>instructions</strong>：AGENTS.md、skills、配置</li>
+              <li><strong>input</strong>：历史、工具结果、当前用户消息</li>
+            </ul>
+          </div>
+          <div class="terminal">
+            <div class="terminal-head"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+            <div class="terminal-body">
+              <div><span class="event">system</span> -> safety + product policy</div>
+              <div><span class="event">tools</span> -> exec / patch / browser / mcp</div>
+              <div><span class="event">instructions</span> -> AGENTS.md + skills</div>
+              <div><span class="event">input</span> -> history + current task</div>
+              <div><span class="ok">cache</span> -> stable prefix matters</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="eyebrow">06 / Layered Architecture</div>
+        <h2>架构分层：五层边界</h2>
+        <div class="layer-stack">
+          <div class="layer"><b>Surface</b><span>CLI / TUI / IDE / Web：输入、展示、审批交互。</span></div>
+          <div class="layer"><b>Protocol</b><span>App Server / JSON-RPC：thread、turn、event 的协议层。</span></div>
+          <div class="layer"><b>Runtime</b><span>Core Session：上下文构建、模型调用、loop 控制。</span></div>
+          <div class="layer"><b>Actions</b><span>Tools / Sandbox / Approval：工具路由、权限、执行和输出捕获。</span></div>
+          <div class="layer"><b>State</b><span>Thread Store：transcript、rollout、compact、checkpoint。</span></div>
+        </div>
+      </section>
+
+      <section>
+        <div class="eyebrow">07 / Tool Runtime</div>
+        <h2>调用流程：从模型输出到真实动作</h2>
+        <div class="flow">
+          <div class="flow-node"><b>Model Output</b><span>text / function_call / exec / patch。</span></div>
+          <div class="flow-node"><b>ToolRouter</b><span>解析响应项，转换为结构化工具调用。</span></div>
+          <div class="flow-node"><b>Registry</b><span>匹配工具 spec、handler 和参数约束。</span></div>
+          <div class="flow-node"><b>Orchestrator</b><span>审批、沙箱、重试、超时、错误处理。</span></div>
+          <div class="flow-node"><b>Result</b><span>输出进入 history，供下一次推理使用。</span></div>
+        </div>
+      </section>
+
+      <section>
+        <div class="eyebrow">08 / Safety Runtime</div>
+        <h2>安全不是提示词，是运行时策略</h2>
+        <div class="grid-4">
+          <div class="card compact"><span class="tag">FS</span><h3>文件权限</h3><p>限制读写范围，避免误改无关路径。</p></div>
+          <div class="card compact"><span class="tag">NET</span><h3>网络权限</h3><p>控制外部访问，降低数据外泄风险。</p></div>
+          <div class="card compact"><span class="tag">APP</span><h3>人工审批</h3><p>高风险命令进入明确授权流程。</p></div>
+          <div class="card compact"><span class="tag">LOG</span><h3>过程审计</h3><p>命令、输出、错误、审批写入历史。</p></div>
+        </div>
+        <div class="callout danger">
+          MCP 工具不是 Codex 原生 Shell 工具。第三方 MCP Server 必须自己实现权限、参数校验、敏感字段保护和审计。
+        </div>
+      </section>
+
+      <section>
+        <div class="eyebrow">09 / Memory System</div>
+        <h2>记忆机制：静态规则 + 动态经验</h2>
+        <div class="grid-2">
+          <div class="card">
+            <span class="tag">Layer 1</span>
+            <h3>AGENTS.md</h3>
+            <p>人工维护。适合测试命令、架构边界、代码风格、禁改区域、权限要求。项目级文件可提交 Git，团队共享。</p>
+          </div>
+          <div class="card">
+            <span class="tag">Layer 2</span>
+            <h3>Memories</h3>
+            <p>自动提炼。适合会话中涌现的 bug 模式、偏好、复盘知识。默认更像个人经验，不自动成为团队规范。</p>
+          </div>
+        </div>
+        <div class="callout">
+          推荐工作流：让 Memories 自动积累，定期把稳定、可靠、团队可复用的内容提升到 AGENTS.md。
+        </div>
+      </section>
+
+      <section>
+        <div class="eyebrow">10 / Extensions</div>
+        <h2>扩展机制：把能力工程化</h2>
+        <div class="grid-3">
+          <div class="card"><span class="tag">MCP</span><h3>连接外部系统</h3><p>数据库、知识库、内部 API、发布平台变成受控工具。</p></div>
+          <div class="card"><span class="tag">Skills</span><h3>固化工作流</h3><p>代码审查、排障、文档生成、表格处理等 SOP。</p></div>
+          <div class="card"><span class="tag">Plugins</span><h3>组合可安装能力</h3><p>把技能、工具、应用封装为团队工具链。</p></div>
+          <div class="card"><span class="tag">Multi-Agent</span><h3>并行子任务</h3><p>适合独立模块调研，必须隔离上下文和写入范围。</p></div>
+          <div class="card"><span class="tag">CI/CD</span><h3>交付链路</h3><p>构建、测试、发布、回滚检查可作为受控工具。</p></div>
+          <div class="card"><span class="tag">Evaluation</span><h3>质量评估</h3><p>用回归测试、trace、成本延迟指标约束 agent 输出。</p></div>
+        </div>
+      </section>
+
+      <section>
+        <div class="eyebrow">11 / Design Tradeoffs</div>
+        <h2>关键设计取舍</h2>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>取舍点</th>
+              <th>Codex 倾向</th>
+              <th>工程收益</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>无状态请求</td>
+              <td>每次携带完整上下文</td>
+              <td>可重放、可审计、支持 ZDR</td>
+            </tr>
+            <tr>
+              <td>Prompt Caching</td>
+              <td>保持静态前缀稳定</td>
+              <td>长对话成本接近线性增长</td>
+            </tr>
+            <tr>
+              <td>权限控制</td>
+              <td>运行时策略优先</td>
+              <td>不把安全寄托在模型“听话”上</td>
+            </tr>
+            <tr>
+              <td>记忆系统</td>
+              <td>AGENTS.md + Memories 分层</td>
+              <td>稳定规则和动态经验分开治理</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <div class="eyebrow">12 / Code Example</div>
+        <h2>示例代码：Agent Loop 伪代码</h2>
+        <pre><code class="language-rust">loop {
+    let context = build_context(
+        thread,
+        project_rules,
+        tools,
+        memories,
+        permissions,
+    );
+
+    let response = model.sample(context).await?;
+
+    if response.is_assistant_message() {
+        thread.record(response).await?;
+        break;
+    }
+
+    let calls = tool_router.parse(response)?;
+    let results = orchestrator.execute_with_policy(calls).await?;
+    thread.record(results).await?;
+}</code></pre>
+      </section>
+
+      <section>
+        <div class="eyebrow">13 / Team Setup</div>
+        <h2>工程落地：先写好 AGENTS.md</h2>
+        <pre><code class="language-markdown"># 项目协作规范
+
+## 修改规则
+- 先阅读相关代码和测试，再做最小安全修改。
+- 不做无关重构，不重排无关文件。
+- 不新增依赖，除非明确说明必要性和风险。
+
+## 验证
+- 修改后优先运行最相关测试。
+- 如果测试未运行，必须说明原因。
+- 不要声称测试通过，除非实际运行且退出码为 0。
+
+## 安全
+- 不打印 secrets、tokens、cookies、authorization headers。
+- 支付、订单、库存、权限、生产写操作必须显式说明风险。</code></pre>
+      </section>
+
+      <section>
+        <div class="eyebrow">14 / Best Practices</div>
+        <h2>最佳实践：小闭环胜过大承诺</h2>
+        <div class="grid-2">
+          <div class="card compact"><h3>任务拆小</h3><p>一次只交付一个可验证目标。</p></div>
+          <div class="card compact"><h3>验收前置</h3><p>提前说明测试、页面、日志和 diff 检查。</p></div>
+          <div class="card compact"><h3>工具最小权限</h3><p>读写分离、范围限制、参数校验、脱敏。</p></div>
+          <div class="card compact"><h3>保留执行证据</h3><p>transcript、命令输出、测试结果、审批记录。</p></div>
+        </div>
+      </section>
+
+      <section>
+        <div class="eyebrow">15 / FAQ & Mistakes</div>
+        <h2>常见问题与误区</h2>
+        <ul>
+          <li><strong>误区：</strong>提示词写清楚就安全。<br><span class="soft">修正：安全边界必须落在运行时策略。</span></li>
+          <li><strong>误区：</strong>Memories 可以替代 AGENTS.md。<br><span class="soft">修正：团队稳定规范应提交到项目规则文件。</span></li>
+          <li><strong>误区：</strong>MCP 工具越多越好。<br><span class="soft">修正：每个工具都增加权限、审计和缓存成本。</span></li>
+          <li><strong>误区：</strong>只看最终答案。<br><span class="soft">修正：可信度来自执行证据和验证结果。</span></li>
+        </ul>
+      </section>
+
+      <section>
+        <div class="eyebrow">16 / Summary</div>
+        <h2>总结：Codex 是工程运行时，不只是模型</h2>
+        <div class="grid-3">
+          <div class="card"><span class="tag">Context</span><h3>放大上下文</h3><p>规则、历史、工具和验收标准越清晰，agent 越少猜。</p></div>
+          <div class="card"><span class="tag">Action</span><h3>缩小动作半径</h3><p>让每次修改可审查、可验证、可回滚。</p></div>
+          <div class="card"><span class="tag">Runtime</span><h3>治理执行过程</h3><p>权限、沙箱、审计、记忆和验证构成可信边界。</p></div>
+        </div>
+      </section>
+
+      <section class="hero">
+        <div class="eyebrow">Q&A</div>
+        <h1>问题讨论</h1>
+        <p class="hero-lead">可以从三个角度展开：怎么接入、怎么控风险、怎么沉淀团队知识。</p>
+        <div class="meta-row">
+          <span class="pill">AGENTS.md</span>
+          <span class="pill">MCP Guardrails</span>
+          <span class="pill">Agent Evaluation</span>
+          <span class="pill">Team Workflow</span>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
+  <script>
+    Reveal.initialize({
+      hash: true,
+      controls: true,
+      progress: true,
+      slideNumber: 'c/t',
+      center: false,
+      keyboard: true,
+      overview: true,
+      transition: 'slide',
+      backgroundTransition: 'fade',
+      width: 1280,
+      height: 720,
+      margin: 0.045,
+      plugins: [RevealHighlight, RevealNotes]
+    });
+
+    const fullscreenBtn = document.getElementById('fullscreenBtn');
+    const pageRoot = document.documentElement;
+
+    function fullscreenElement() {
+      return document.fullscreenElement || document.webkitFullscreenElement;
+    }
+
+    function enterFullscreen() {
+      const request = pageRoot.requestFullscreen || pageRoot.webkitRequestFullscreen;
+      return request ? request.call(pageRoot) : Promise.reject(new Error('fullscreen unavailable'));
+    }
+
+    function exitFullscreen() {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen;
+      return exit ? exit.call(document) : Promise.reject(new Error('fullscreen unavailable'));
+    }
+
+    fullscreenBtn.addEventListener('click', async () => {
+      try {
+        if (!fullscreenElement()) {
+          await enterFullscreen();
+          fullscreenBtn.textContent = '退出全屏';
+        } else {
+          await exitFullscreen();
+          fullscreenBtn.textContent = '全屏';
+        }
+      } catch (error) {
+        fullscreenBtn.textContent = '全屏不可用';
+        setTimeout(() => {
+          fullscreenBtn.textContent = fullscreenElement() ? '退出全屏' : '全屏';
+        }, 1300);
+      }
+    });
+
+    document.addEventListener('fullscreenchange', () => {
+      fullscreenBtn.textContent = fullscreenElement() ? '退出全屏' : '全屏';
+    });
+
+    document.addEventListener('webkitfullscreenchange', () => {
+      fullscreenBtn.textContent = fullscreenElement() ? '退出全屏' : '全屏';
+    });
+  </script>
+</body>
+</html>

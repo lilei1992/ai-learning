@@ -1,0 +1,570 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --slide-bg:var(--color-background-primary);
+  --surface:var(--color-background-secondary);
+  --border:var(--color-border-tertiary);
+  --text:var(--color-text-primary);
+  --muted:var(--color-text-secondary);
+  --hint:var(--color-text-tertiary);
+  --accent:#534AB7;
+  --accent-light:#EEEDFE;
+  --accent-mid:#AFA9EC;
+  --danger:#D85A30;
+  --danger-light:#FAECE7;
+  --success:#1D9E75;
+  --success-light:#E1F5EE;
+  --amber:#BA7517;
+  --amber-light:#FAEEDA;
+  --r:var(--border-radius-lg);
+  --rm:var(--border-radius-md);
+}
+body{font-family:var(--font-sans);color:var(--text);background:transparent}
+.deck{width:100%;max-width:760px;margin:0 auto;padding:0 0 2rem}
+
+.slide{
+  background:var(--slide-bg);
+  border:0.5px solid var(--border);
+  border-radius:var(--r);
+  padding:2.5rem 2.5rem 2rem;
+  margin-bottom:1.5rem;
+  position:relative;
+  overflow:hidden;
+}
+.slide-num{
+  position:absolute;top:1.25rem;right:1.5rem;
+  font-size:12px;color:var(--hint);letter-spacing:.04em;
+}
+.tag{
+  display:inline-block;
+  font-size:11px;font-weight:500;letter-spacing:.06em;
+  padding:3px 10px;border-radius:20px;
+  background:var(--accent-light);color:var(--accent);
+  margin-bottom:1rem;text-transform:uppercase;
+}
+.tag.danger{background:var(--danger-light);color:var(--danger)}
+.tag.success{background:var(--success-light);color:var(--success)}
+.tag.amber{background:var(--amber-light);color:var(--amber)}
+
+h1.title{font-size:26px;font-weight:500;line-height:1.3;margin-bottom:.5rem}
+h2.slide-title{font-size:20px;font-weight:500;line-height:1.3;margin-bottom:.25rem}
+.subtitle{font-size:14px;color:var(--muted);margin-bottom:1.75rem}
+p{font-size:15px;line-height:1.7;color:var(--muted)}
+
+.hero-stat{
+  display:flex;gap:2rem;margin:1.75rem 0;
+  flex-wrap:wrap;
+}
+.stat-card{
+  flex:1;min-width:140px;
+  background:var(--surface);
+  border-radius:var(--rm);
+  padding:.875rem 1.125rem;
+}
+.stat-card .num{font-size:28px;font-weight:500;line-height:1.1}
+.stat-card .label{font-size:12px;color:var(--muted);margin-top:4px}
+.stat-card.accent .num{color:var(--accent)}
+.stat-card.danger .num{color:var(--danger)}
+.stat-card.success .num{color:var(--success)}
+
+.divider{height:0.5px;background:var(--border);margin:1.5rem 0}
+
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1.25rem}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.875rem;margin-top:1.25rem}
+
+.card{
+  background:var(--surface);
+  border-radius:var(--rm);
+  padding:1rem 1.125rem;
+}
+.card h3{font-size:14px;font-weight:500;margin-bottom:.5rem}
+.card p{font-size:13px;line-height:1.6}
+
+.bad-good{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1.25rem}
+.box{border-radius:var(--rm);padding:1rem 1.125rem}
+.box.bad{background:var(--danger-light);border:0.5px solid #F0997B}
+.box.good{background:var(--success-light);border:0.5px solid #5DCAA5}
+.box .box-label{font-size:11px;font-weight:500;letter-spacing:.06em;margin-bottom:.625rem;display:flex;align-items:center;gap:6px}
+.box.bad .box-label{color:var(--danger)}
+.box.good .box-label{color:var(--success)}
+.box ul{padding-left:1.1rem}
+.box ul li{font-size:13px;line-height:1.8;color:var(--text)}
+
+code{
+  font-family:var(--font-mono);
+  font-size:12px;
+  background:var(--surface);
+  border:0.5px solid var(--border);
+  border-radius:4px;
+  padding:2px 6px;
+}
+pre.codeblock{
+  font-family:var(--font-mono);
+  font-size:12px;
+  background:var(--surface);
+  border:0.5px solid var(--border);
+  border-radius:var(--rm);
+  padding:1rem 1.25rem;
+  line-height:1.75;
+  overflow-x:auto;
+  margin-top:1rem;
+  color:var(--text);
+}
+pre.codeblock .c{color:var(--hint)}
+pre.codeblock .k{color:var(--accent)}
+pre.codeblock .s{color:var(--success)}
+pre.codeblock .v{color:var(--danger)}
+
+.formula{
+  background:var(--accent-light);
+  border:0.5px solid var(--accent-mid);
+  border-radius:var(--rm);
+  padding:1.25rem 1.5rem;
+  margin:1.25rem 0;
+}
+.formula .eq{font-size:15px;font-weight:500;color:var(--accent);line-height:2}
+.formula .eq span.plus{color:var(--hint);margin:0 .5rem}
+.formula .eq span.cross{color:var(--danger);text-decoration:line-through;opacity:.6}
+
+.tip-list{list-style:none;padding:0;margin-top:1.25rem}
+.tip-list li{
+  display:flex;align-items:flex-start;gap:.875rem;
+  padding:.875rem 0;
+  border-bottom:0.5px solid var(--border);
+  font-size:14px;line-height:1.6;
+}
+.tip-list li:last-child{border-bottom:none}
+.tip-num{
+  flex-shrink:0;
+  width:24px;height:24px;border-radius:50%;
+  background:var(--accent-light);color:var(--accent);
+  font-size:12px;font-weight:500;
+  display:flex;align-items:center;justify-content:center;
+  margin-top:1px;
+}
+.tip-list li .tip-body strong{font-weight:500;display:block;margin-bottom:2px}
+.tip-list li .tip-body span{color:var(--muted);font-size:13px}
+
+.timeline{margin-top:1.25rem}
+.tl-item{display:flex;gap:1rem;margin-bottom:1rem}
+.tl-dot{flex-shrink:0;width:8px;height:8px;border-radius:50%;margin-top:7px}
+.tl-dot.bad{background:var(--danger)}
+.tl-dot.good{background:var(--success)}
+.tl-dot.neutral{background:var(--accent)}
+.tl-item .tl-text strong{font-weight:500;font-size:14px}
+.tl-item .tl-text span{font-size:13px;color:var(--muted);display:block}
+
+.saving-bar{margin:.625rem 0;display:flex;align-items:center;gap:.75rem}
+.saving-bar .bar-label{font-size:13px;min-width:140px;color:var(--muted)}
+.saving-bar .bar-track{flex:1;height:8px;background:var(--surface);border-radius:4px;overflow:hidden;border:0.5px solid var(--border)}
+.saving-bar .bar-fill{height:100%;border-radius:4px;background:var(--accent)}
+.saving-bar .bar-pct{font-size:12px;font-weight:500;min-width:36px;text-align:right;color:var(--accent)}
+
+.template-wrap{
+  background:var(--surface);
+  border:0.5px solid var(--border);
+  border-radius:var(--rm);
+  margin-top:1.25rem;overflow:hidden;
+}
+.template-header{
+  padding:.625rem 1rem;
+  background:var(--accent-light);
+  border-bottom:0.5px solid var(--accent-mid);
+  font-size:12px;font-weight:500;color:var(--accent);
+  display:flex;align-items:center;gap:6px;
+}
+.template-body{
+  padding:1rem 1.25rem;
+  font-family:var(--font-mono);
+  font-size:12px;
+  line-height:1.85;
+  color:var(--text);
+}
+.template-body .cmt{color:var(--hint)}
+.template-body .key{color:var(--accent)}
+.template-body .val{color:var(--success)}
+
+.cover-accent{
+  position:absolute;top:-40px;right:-40px;
+  width:200px;height:200px;border-radius:50%;
+  background:var(--accent-light);opacity:.5;
+  pointer-events:none;
+}
+.cover-rule{
+  display:grid;grid-template-columns:1fr 1fr 1fr;
+  gap:.75rem;margin-top:1.75rem;
+}
+.cover-rule-item{
+  background:var(--surface);border-radius:var(--rm);
+  padding:.875rem 1rem;
+  border-left:3px solid var(--accent);
+}
+.cover-rule-item .cr-label{font-size:12px;color:var(--hint);margin-bottom:4px}
+.cover-rule-item .cr-val{font-size:18px;font-weight:500;color:var(--accent)}
+.cover-rule-item .cr-desc{font-size:12px;color:var(--muted);margin-top:3px}
+
+.window-vis{
+  border:0.5px solid var(--border);
+  border-radius:var(--rm);
+  margin:1.25rem 0;overflow:hidden;
+}
+.window-titlebar{
+  background:var(--surface);
+  padding:.5rem 1rem;
+  font-size:12px;color:var(--muted);
+  border-bottom:0.5px solid var(--border);
+  display:flex;align-items:center;gap:6px;
+}
+.window-body{padding:.875rem 1rem}
+.ctx-row{
+  display:flex;align-items:center;gap:.625rem;margin:.3rem 0;
+}
+.ctx-bar{height:18px;border-radius:3px;display:flex;align-items:center;padding:0 8px;font-size:11px;font-weight:500;flex-shrink:0}
+.ctx-bar.purple{background:#EEEDFE;color:#534AB7;width:var(--w)}
+.ctx-bar.red{background:#FAECE7;color:#993C1D;width:var(--w)}
+.ctx-bar.teal{background:#E1F5EE;color:#0F6E56;width:var(--w)}
+.ctx-bar.gray{background:var(--surface);color:var(--muted);width:var(--w);border:0.5px solid var(--border)}
+.ctx-label{font-size:12px;color:var(--muted)}
+
+.case-table{width:100%;border-collapse:collapse;margin-top:1.25rem}
+.case-table th{font-size:12px;font-weight:500;color:var(--muted);padding:.5rem .75rem;text-align:left;border-bottom:0.5px solid var(--border);background:var(--surface)}
+.case-table td{font-size:13px;padding:.625rem .75rem;border-bottom:0.5px solid var(--border);vertical-align:top}
+.case-table tr:last-child td{border-bottom:none}
+.pill{display:inline-block;font-size:11px;font-weight:500;padding:2px 8px;border-radius:10px}
+.pill.red{background:var(--danger-light);color:var(--danger)}
+.pill.green{background:var(--success-light);color:var(--success)}
+.pill.amber{background:var(--amber-light);color:var(--amber)}
+</style>
+
+<div class="deck">
+<h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">Codex Token Engineering — 团队分享幻灯片，共6部分</h2>
+
+<div class="slide">
+  <div class="cover-accent"></div>
+  <div class="slide-num">封面</div>
+  <div class="tag">Context Engineering</div>
+  <h1 class="title">为什么优秀工程师的 Codex<br>token 消耗只有普通人的 1/10</h1>
+  <p class="subtitle" style="margin-bottom:1.5rem">让团队学会 Context Engineering — 降本 × 提效 × 更快交付</p>
+  <div class="cover-rule">
+    <div class="cover-rule-item">
+      <div class="cr-label">核心差距</div>
+      <div class="cr-val">10×</div>
+      <div class="cr-desc">相同任务的 token 消耗</div>
+    </div>
+    <div class="cover-rule-item">
+      <div class="cr-label">根本原因</div>
+      <div class="cr-val">Context</div>
+      <div class="cr-desc">喂进去的内容决定一切</div>
+    </div>
+    <div class="cover-rule-item">
+      <div class="cr-label">解法</div>
+      <div class="cr-val">动态组装</div>
+      <div class="cr-desc">按需而非全量</div>
+    </div>
+  </div>
+</div>
+
+<div class="slide">
+  <div class="slide-num">01 / 06</div>
+  <div class="tag danger">Token 爆炸</div>
+  <h2 class="slide-title">Token 为什么爆炸</h2>
+  <p class="subtitle">绝大多数 token 浪费来自同一个根因</p>
+
+  <div class="bad-good">
+    <div class="box bad">
+      <div class="box-label"><i class="ti ti-x" aria-hidden="true"></i> 普通工程师的做法</div>
+      <ul>
+        <li>把整个项目目录粘进去</li>
+        <li>每次对话带上完整历史记录</li>
+        <li>包含无关模块的代码</li>
+        <li>把 build 日志全量输出</li>
+        <li>用完不清理 context</li>
+      </ul>
+    </div>
+    <div class="box good">
+      <div class="box-label"><i class="ti ti-check" aria-hidden="true"></i> 优秀工程师的做法</div>
+      <ul>
+        <li>只给当前任务相关的 2-3 个文件</li>
+        <li>必要时主动 /compact 压缩</li>
+        <li>用 CodeGraph 精准定位符号</li>
+        <li>grep 过滤后再传日志</li>
+        <li>任务结束即开新 session</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <div class="hero-stat">
+    <div class="stat-card danger">
+      <div class="num">50K+</div>
+      <div class="label">读4个文件 + 一次 build 消耗的 token</div>
+    </div>
+    <div class="stat-card accent">
+      <div class="num">4次</div>
+      <div class="label">按这个速度，200K context 只够深度迭代</div>
+    </div>
+    <div class="stat-card success">
+      <div class="num">90%</div>
+      <div class="label">精简 AGENTS.md 后可节省的 context 占比</div>
+    </div>
+  </div>
+</div>
+
+<div class="slide">
+  <div class="slide-num">02 / 06</div>
+  <div class="tag">Context 原理</div>
+  <h2 class="slide-title">Context Window 工作原理</h2>
+  <p class="subtitle">模型每次推理只能看到窗口内的内容，多一个 token 都是钱</p>
+
+  <div class="window-vis">
+    <div class="window-titlebar"><i class="ti ti-layout-sidebar" style="font-size:14px" aria-hidden="true"></i> Context Window（以 200K 为例）</div>
+    <div class="window-body">
+      <div class="ctx-row">
+        <div class="ctx-bar purple" style="--w:52%">System / AGENTS.md</div>
+        <div class="ctx-label">固定开销，每轮必付</div>
+      </div>
+      <div class="ctx-row">
+        <div class="ctx-bar teal" style="--w:18%">相关代码文件</div>
+        <div class="ctx-label">真正有用的部分</div>
+      </div>
+      <div class="ctx-row">
+        <div class="ctx-bar red" style="--w:22%">历史对话噪音</div>
+        <div class="ctx-label">旧轮次的工具输出、重复信息</div>
+      </div>
+      <div class="ctx-row">
+        <div class="ctx-bar gray" style="--w:8%">剩余可用</div>
+        <div class="ctx-label">实际能放新内容的空间</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="card">
+      <h3><i class="ti ti-arrow-right" style="font-size:14px;color:var(--accent)" aria-hidden="true"></i> 输入 token</h3>
+      <p>System prompt + 历史对话 + 当前消息 + 工具调用结果，全部算钱。大模型看到的每一个字都有成本。</p>
+    </div>
+    <div class="card">
+      <h3><i class="ti ti-arrow-right" style="font-size:14px;color:var(--danger)" aria-hidden="true"></i> 输出 token</h3>
+      <p>模型生成的每一个 token 通常比输入贵 3-6 倍。让模型少废话、关掉不必要的 extended thinking，立竿见影。</p>
+    </div>
+  </div>
+</div>
+
+<div class="slide">
+  <div class="slide-num">03 / 06</div>
+  <div class="tag amber">成本分析</div>
+  <h2 class="slide-title">Codex Token 成本分析</h2>
+  <p class="subtitle">中等强度 Java 开发，一天真实花多少</p>
+
+  <table class="case-table">
+    <thead>
+      <tr>
+        <th>使用模式</th>
+        <th>日均 token</th>
+        <th>日均费用（GPT-5.5）</th>
+        <th>月费用</th>
+        <th>级别</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>全量喂入，不清理 context</td>
+        <td>8M+</td>
+        <td>~$40</td>
+        <td>~$1200</td>
+        <td><span class="pill red">危险</span></td>
+      </tr>
+      <tr>
+        <td>普通用法，偶尔清理</td>
+        <td>2-4M</td>
+        <td>~$15</td>
+        <td>~$450</td>
+        <td><span class="pill amber">普通</span></td>
+      </tr>
+      <tr>
+        <td>Context Engineering 实践后</td>
+        <td>400K-800K</td>
+        <td>~$3</td>
+        <td>~$90</td>
+        <td><span class="pill green">优秀</span></td>
+      </tr>
+      <tr>
+        <td>换用 DeepSeek V4 接入</td>
+        <td>400K-800K</td>
+        <td>~$0.15</td>
+        <td>~$4.5</td>
+        <td><span class="pill green">极致</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="formula" style="margin-top:1.5rem">
+    <div style="font-size:13px;color:var(--accent);font-weight:500;margin-bottom:.5rem">一次 coding Agent 任务的 token 构成</div>
+    <div class="eq">
+      总消耗 = AGENTS.md <span class="plus">+</span> 历史对话 <span class="plus">+</span> 工具输出 <span class="plus">+</span> 代码文件 <span class="plus">+</span> 模型回复
+    </div>
+    <div style="font-size:13px;color:var(--muted);margin-top:.5rem">前三项是可优化的噪音，后两项才是真正的信号</div>
+  </div>
+</div>
+
+<div class="slide">
+  <div class="slide-num">04 / 06</div>
+  <div class="tag success">降本技巧</div>
+  <h2 class="slide-title">6 个降本技巧</h2>
+  <p class="subtitle">按收益从高到低排序，每条都有实测数据</p>
+
+  <ul class="tip-list">
+    <li>
+      <div class="tip-num">1</div>
+      <div class="tip-body">
+        <strong>精简 AGENTS.md — 节省 30–90%</strong>
+        <span>3847 token 的 AGENTS.md 精简到 312 token，质量无回归。只写项目"形状"，细节按路径引用不预加载。</span>
+      </div>
+    </li>
+    <li>
+      <div class="tip-num">2</div>
+      <div class="tip-body">
+        <strong>CodeGraph MCP — 减少 70% 工具调用</strong>
+        <span>用预索引知识图谱替代 grep 探索。Agent 发现阶段从 20-50 次工具调用降到 3-6 次，token 节省 35%。</span>
+      </div>
+    </li>
+    <li>
+      <div class="tip-num">3</div>
+      <div class="tip-body">
+        <strong>RTK / Headroom 拦截 shell 输出 — 节省 60–95%</strong>
+        <span><code>mvn test</code>、<code>git status</code> 的原始输出在进入 LLM 前被压缩为纯信号，常见命令节省 60-90%。</span>
+      </div>
+    </li>
+    <li>
+      <div class="tip-num">4</div>
+      <div class="tip-body">
+        <strong>模型分级路由 — 节省 40–60%</strong>
+        <span>探索、日志、文档查找用 gpt-5.4-mini，主线推理用 gpt-5.5。complex thinking 只给架构级问题开。</span>
+      </div>
+    </li>
+    <li>
+      <div class="tip-num">5</div>
+      <div class="tip-body">
+        <strong>精确 Prompt + 一任务一 session — 节省 20–50%</strong>
+        <span>"修复 src/auth.ts 第42行的 bug" 比 "认证有问题帮我查" 消耗少得多。任务完成即 /clear 或开新会话。</span>
+      </div>
+    </li>
+    <li>
+      <div class="tip-num">6</div>
+      <div class="tip-body">
+        <strong>Prompt Caching — 缓存命中折扣 75%</strong>
+        <span>把稳定内容放在 AGENTS.md 最前面，让缓存命中最大化。重复内容只收 25% 的价格。</span>
+      </div>
+    </li>
+  </ul>
+
+  <div class="divider"></div>
+  <div style="font-size:13px;color:var(--muted);margin-top:.5rem">综合使用后实测：整体 token 消耗降低 <strong style="color:var(--success)">90%+</strong></div>
+</div>
+
+<div class="slide">
+  <div class="slide-num">05 / 06</div>
+  <div class="tag">真实案例</div>
+  <h2 class="slide-title">真实项目案例对比</h2>
+  <p class="subtitle">同一个 Spring Boot 服务重构任务，两种做法的差异</p>
+
+  <div class="bad-good">
+    <div class="box bad">
+      <div class="box-label"><i class="ti ti-x" aria-hidden="true"></i> 错误：全量喂入</div>
+      <ul>
+        <li>把整个 src/ 目录读入</li>
+        <li>粘贴完整 maven build 日志</li>
+        <li>带上所有历史对话</li>
+        <li>AGENTS.md 超过 3000 token</li>
+        <li>每次都重新描述项目背景</li>
+      </ul>
+    </div>
+    <div class="box good">
+      <div class="box-label"><i class="ti ti-check" aria-hidden="true"></i> 正确：按需动态组装</div>
+      <ul>
+        <li>codegraph_search 定位相关类</li>
+        <li>只传 grep 过滤后的报错行</li>
+        <li>/compact 后再继续</li>
+        <li>AGENTS.md 控制在 300 token</li>
+        <li>路径引用规范文档，不预加载</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="formula" style="margin-top:1.5rem">
+    <div style="font-size:13px;color:var(--accent);font-weight:500;margin-bottom:.625rem">正确的 Context 组装公式</div>
+    <div class="eq">
+      Context = 当前任务 <span class="plus">+</span> 相关代码 <span class="plus">+</span> 相关文档 <span class="plus">+</span> 必要历史
+    </div>
+    <div class="eq" style="margin-top:.5rem">
+      <span class="cross">无关代码</span><span class="plus"> </span>
+      <span class="cross">无关日志</span><span class="plus"> </span>
+      <span class="cross">无关对话</span>
+      <span style="color:var(--hint);margin-left:.5rem">← 不要包含</span>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <div style="font-size:13px;font-weight:500;margin-bottom:.75rem">节省效果（同一重构任务）</div>
+  <div class="saving-bar"><div class="bar-label">AGENTS.md 精简</div><div class="bar-track"><div class="bar-fill" style="width:90%"></div></div><div class="bar-pct">-90%</div></div>
+  <div class="saving-bar"><div class="bar-label">CodeGraph 替代 grep</div><div class="bar-track"><div class="bar-fill" style="width:35%"></div></div><div class="bar-pct">-35%</div></div>
+  <div class="saving-bar"><div class="bar-label">shell 输出压缩</div><div class="bar-track"><div class="bar-fill" style="width:70%"></div></div><div class="bar-pct">-70%</div></div>
+  <div class="saving-bar"><div class="bar-label">模型分级路由</div><div class="bar-track"><div class="bar-fill" style="width:50%"></div></div><div class="bar-pct">-50%</div></div>
+</div>
+
+<div class="slide">
+  <div class="slide-num">06 / 06</div>
+  <div class="tag">团队规范</div>
+  <h2 class="slide-title">团队 AGENTS.md 模板</h2>
+  <p class="subtitle">复制即用，控制在 300 token 以内</p>
+
+  <div class="template-wrap">
+    <div class="template-header"><i class="ti ti-file-text" style="font-size:14px" aria-hidden="true"></i> AGENTS.md — Spring Boot 团队模板</div>
+    <div class="template-body">
+<span class="cmt">## 项目</span>
+<span class="key">框架</span>: <span class="val">Spring Boot 3.x / Java 21 / Maven</span>
+<span class="key">包结构</span>: <span class="val">controller / service / repository / domain / config</span>
+<span class="key">测试命令</span>: <span class="val">mvn test -pl &lt;module-name&gt;</span>
+<span class="key">构建命令</span>: <span class="val">mvn clean install -DskipTests</span>
+
+<span class="cmt">## 使用 CodeGraph（必须）</span>
+- 探索代码库 → <span class="val">codegraph_search</span> 优先于 grep
+- 修改接口前 → <span class="val">codegraph_impact</span> 检查影响范围
+- 追踪调用链 → <span class="val">codegraph_callers / callees</span>
+
+<span class="cmt">## Context 规范</span>
+- 每个任务只读相关文件，不全量扫描
+- shell 输出超过 100 行时先 grep 过滤
+- 任务完成后执行 /compact 或开新 session
+- 详细规范见 <span class="val">./docs/conventions.md</span>（按需读取）
+
+<span class="cmt">## 禁止事项</span>
+- 不直接修改 **/migration/** 下的 SQL 文件
+- Service 层不跨模块直接调用其他 Service
+- 不在 controller 层写业务逻辑
+
+<span class="cmt">## 代码风格</span>
+- 遵循阿里 Java 开发手册
+- 异常统一走 GlobalExceptionHandler
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <div class="three-col">
+    <div class="card">
+      <h3>今天就能做</h3>
+      <p>精简 AGENTS.md 到 300 token，立刻节省 30-90% 的固定开销。</p>
+    </div>
+    <div class="card">
+      <h3>本周配置</h3>
+      <p>安装 CodeGraph MCP，codegraph init 初始化项目索引，注册到 Codex。</p>
+    </div>
+    <div class="card">
+      <h3>养成习惯</h3>
+      <p>一任务一 session，精确给出文件路径，任务结束主动 /compact。</p>
+    </div>
+  </div>
+</div>
+
+</div>

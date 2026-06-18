@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Codex paw line icon</title>
+  <desc id="desc">Minimal line paw icon with a small code cursor mark.</desc>
+  <rect width="128" height="128" rx="28" fill="#F7F9FC"/>
+  <path d="M37 70c-8 0-14-7-14-15 0-7 5-13 12-13 8 0 14 8 16 18 1 6-6 10-14 10Z" fill="none" stroke="#172033" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M91 70c8 0 14-7 14-15 0-7-5-13-12-13-8 0-14 8-16 18-1 6 6 10 14 10Z" fill="none" stroke="#172033" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M51 45c-7 0-12-7-12-15 0-7 5-12 11-12 8 0 13 7 13 16 0 7-5 11-12 11Z" fill="none" stroke="#172033" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M77 45c7 0 12-7 12-15 0-7-5-12-11-12-8 0-13 7-13 16 0 7 5 11 12 11Z" fill="none" stroke="#172033" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M38 100c0-18 12-32 26-32s26 14 26 32c0 8-6 12-15 8-7-3-15-3-22 0-9 4-15 0-15-8Z" fill="none" stroke="#172033" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M58 91h12" stroke="#2773FF" stroke-width="6" stroke-linecap="round"/>
+  <path d="M70 84l8 7-8 7" fill="none" stroke="#2773FF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

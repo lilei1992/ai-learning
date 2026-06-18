@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Code 架构分享 - Reveal.js 实时演示版</title>
+  <link rel="stylesheet" href="./vendor/reveal/dist/reveal.css">
+  <link rel="stylesheet" href="./vendor/reveal/dist/black.css">
+  <link rel="stylesheet" href="./styles.css?v=20260528-roadmap">
+</head>
+<body>
+<div class="reveal">
+  <div class="slides">
+
+    <section class="cover" data-background-color="#080a0f">
+      <div class="cover-grid">
+        <div class="cover-copy">
+          <div class="kicker">Claude Code Architecture Share（架构分享）</div>
+          <h1>Claude Code</h1>
+          <div class="cover-subtitle">AI Agent 架构入门</div>
+          <p class="lead">不是源码逐行讲解，而是把它拆成：它是什么、怎么循环、怎么用工具、怎么控风险、怎么扩展。</p>
+          <div class="pill-row">
+            <span>Agent Loop（Agent 循环）</span>
+            <span>Context Compaction（上下文压缩）</span>
+            <span>Permission Pipeline（权限管线）</span>
+            <span>Multi-Agent（多 Agent）</span>
+            <span>MCP Extension（MCP 扩展）</span>
+          </div>
+        </div>
+        <div class="cover-system" aria-hidden="true">
+          <div class="system-node user"><span class="node-title">User</span><small>用户 · 目标</small></div>
+          <div class="system-line"></div>
+          <div class="system-node agent"><span class="node-title">Agent Loop</span><small>Agent 循环 · 判断下一步</small></div>
+          <div class="system-fan">
+            <span>Tools（工具）</span>
+            <span>Context（上下文）</span>
+            <span>Permission（权限）</span>
+          </div>
+          <div class="system-node api"><span class="node-title">Claude API</span><small>模型接口 · 模型能力</small></div>
+        </div>
+      </div>
+      <aside class="notes">
+        开场先对齐听众预期：这不是 TypeScript 源码课，而是 AI Agent 系统设计拆解。技术名保留，概念解释中文化。
+      </aside>
+    </section>
+
+    <section class="learning-path-slide">
+      <div class="section-label">00 / 先建立直觉</div>
+      <h2>先用一句话讲清楚：Claude Code 是什么？</h2>
+      <div class="definition">
+        <div class="definition-main">一个会读项目、改文件、跑命令、看结果、再继续调整的命令行 AI 编程助手。</div>
+        <div class="definition-sub">普通聊天机器人只会“回答”；Claude Code 的核心是“边想边行动”。</div>
+      </div>
+      <div class="compare-grid">
+        <div>
+          <h3>聊天式 AI</h3>
+          <p>用户提问，模型回答。执行动作通常要靠人复制粘贴。</p>
+        </div>
+        <div>
+          <h3>Agent 式 AI</h3>
+          <p>模型可以选择工具，执行动作，读取反馈，再决定下一步。</p>
+        </div>
+      </div>
+      <aside class="notes">
+        小白第一关是理解 Agent 和聊天机器人的差异。强调“行动闭环”，不要先讲技术栈。
+      </aside>
+    </section>
+
+    <section>
+      <div class="section-label">00.5 / Learning Model（学习模型）</div>
+      <h2>这次学习可以先记住一个类比</h2>
+      <div class="learning-model">
+        <div><b>AI Agent</b><span>像一个实习工程师：能理解目标，也会自己尝试下一步。</span></div>
+        <div><b>Tools（工具）</b><span>像电脑上的能力：读文件、改文件、跑命令、访问外部系统。</span></div>
+        <div><b>Permission（权限）</b><span>像审批制度：低风险自动做，高风险必须问人。</span></div>
+        <div><b>Context（上下文）</b><span>像桌面资料：放太多会乱，必须归档、压缩和总结。</span></div>
+      </div>
+      <p class="big-takeaway">你不需要先懂源码。只要理解“人给目标、模型做判断、工具去执行、权限控边界、上下文保记忆”这条主线。</p>
+    </section>
+
+    <section>
+      <div class="section-label">01 / Background（背景）</div>
+      <h2>为什么这份架构值得学习？</h2>
+      <div class="metric-strip">
+        <div><strong>512K</strong><span>行 TypeScript 源码</span></div>
+        <div><strong>4,600+</strong><span>源文件</span></div>
+        <div><strong>50+</strong><span>内置工具</span></div>
+        <div><strong>5+</strong><span>关键子系统</span></div>
+      </div>
+      <div class="story-line">
+        <p>原材料来自一次 npm 包源码映射文件（source map）暴露后的社区分析。对学习者来说，重点不是“泄露事件”，而是它提供了一个观察生产级 AI Agent 的窗口。</p>
+        <p class="muted">本演示按原始材料口径整理，不把未验证细节当作官方承诺。</p>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-label">02 / Learning Path（学习路径）</div>
+      <h2>今天只抓住 5 个问题</h2>
+      <ol class="agenda visual-agenda">
+        <li><span>它为什么不是普通 CLI？</span><em>因为它有持续行动的 Agent Loop（Agent 循环）。</em></li>
+        <li><span>它怎么决定下一步？</span><em>模型判断 + 确定性基础设施。</em></li>
+        <li><span>它怎么安全地改代码？</span><em>Permission（权限）、Rule（规则）、Human Confirmation（人工确认）、Sandbox（沙箱）。</em></li>
+        <li><span>它怎么避免上下文爆掉？</span><em>Context Compaction（上下文压缩）和 Summary（摘要）策略。</em></li>
+        <li><span>它怎么接入外部世界？</span><em>MCP、Hooks（钩子）、Skills（技能）、Plugins（插件）。</em></li>
+      </ol>
+    </section>
+
+    <section>
+      <div class="section-label">03 / Glossary（术语表）</div>
+      <h2>先把常见英文概念翻译成人话</h2>
+      <div class="term-grid">
+        <div><b>Agent</b><span>会自主选择下一步动作的 AI 执行体</span></div>
+        <div><b>Loop</b><span>循环：观察、思考、行动、反馈、再行动</span></div>
+        <div><b>Context</b><span>上下文：模型当前能看到的全部信息</span></div>
+        <div><b>Compaction</b><span>压缩：把冗长上下文变短但尽量不丢重点</span></div>
+        <div><b>Permission</b><span>权限：哪些动作能自动做，哪些必须问人</span></div>
+        <div><b>Sandbox</b><span>沙箱：限制危险命令影响范围的隔离环境</span></div>
+        <div><b>Transcript</b><span>会话记录：每一步输入输出的流水账</span></div>
+        <div><b>Harness</b><span>围栏：让模型自由发挥但不能越界的基础设施</span></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-label">04 / 技术栈</div>
+      <h2>技术栈不是学习重点，只看它解决什么问题</h2>
+      <table class="clean-table">
+        <thead>
+          <tr><th>层次</th><th>选择</th><th>小白解释</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>运行时</td><td>Bun</td><td>像更快启动的 Node.js，适合命令行工具。</td></tr>
+          <tr><td>语言</td><td>TypeScript strict</td><td>代码很多时，用强类型减少低级错误。</td></tr>
+          <tr><td>终端界面</td><td>React + Ink</td><td>把终端做成组件化 UI，不只是打印文字。</td></tr>
+          <tr><td>模型接口</td><td>@anthropic-ai/sdk</td><td>官方 API 客户端，支持流式返回。</td></tr>
+          <tr><td>工具协议</td><td>MCP SDK</td><td>让模型按统一协议调用外部工具。</td></tr>
+          <tr><td>Feature Flag（功能开关）</td><td>GrowthBook</td><td>灰度发布、A/B 测试、紧急关闭未成熟功能。</td></tr>
+        </tbody>
+      </table>
+      <p class="note-line">学习建议：技术名先不用背，先理解它们在系统里扮演什么角色。</p>
+    </section>
+
+    <section>
+      <div class="section-label">05 / 总览</div>
+      <h2>五层架构：先看地图，再看细节</h2>
+      <div class="layers">
+        <div data-layer="01"><b>表现层</b><span>CLI、终端 UI、SDK Server、远程入口</span></div>
+        <div data-layer="02"><b>核心层</b><span>Agent Loop（Agent 循环）、Streaming（流式调用）、State Transition（状态转移）</span></div>
+        <div data-layer="03"><b>安全层</b><span>Permission System（权限系统）、Hook（钩子）、Rule Evaluation（规则评估）、Sandbox（沙箱）</span></div>
+        <div data-layer="04"><b>状态层</b><span>Context Assembly（上下文组装）、Transcript（会话记录）、Memory（记忆）、Compaction（压缩）</span></div>
+        <div data-layer="05"><b>后端层</b><span>Claude API、MCP 服务、文件系统、Shell、网络</span></div>
+      </div>
+      <p class="big-takeaway">核心思想：让 LLM 负责判断“下一步做什么”，让工程系统负责“能不能做、怎么安全做、做完如何记录”。</p>
+    </section>
+
+    <section>
+      <div class="section-label">06 / Live Demo（实时演示） A</div>
+      <h2>Agent Loop（Agent 循环）：连续回合</h2>
+      <div class="demo-layout">
+        <div class="demo-panel">
+          <div class="loop-visual" id="loopVisual">
+            <div data-step="0">Observe（观察需求）</div>
+            <div data-step="1">Assemble Context（组装上下文）</div>
+            <div data-step="2">Call Model（调用模型）</div>
+            <div data-step="3">Select Tool（选择工具）</div>
+            <div data-step="4">Run Tool（执行并读结果）</div>
+            <div data-step="5">Stop Check（判断是否继续）</div>
+          </div>
+          <button class="demo-button" id="loopNext">下一步</button>
+        </div>
+        <div class="demo-explain">
+          <h3 id="loopTitle">观察需求</h3>
+          <p id="loopText">系统先理解用户目标、当前目录、已有约束和历史对话。</p>
+          <pre id="loopLog">turn 1: user asks for a code change</pre>
+        </div>
+      </div>
+      <aside class="notes">
+        演示时按按钮走一圈。强调循环的停止条件：完成、用户中断、安全拒绝、达到最大回合数。
+      </aside>
+    </section>
+
+    <section>
+      <div class="section-label">07 / Inside Agent Loop（Agent 循环内部）</div>
+      <h2>一轮 Turn（回合）里发生了什么？</h2>
+      <div class="pipeline">
+        <div><b>1. Pre-Request Compaction（请求前压缩）</b><span>先看上下文是否太长</span></div>
+        <div><b>2. API Streaming（API 流式调用）</b><span>模型边生成边返回事件</span></div>
+        <div><b>3. Tool Authorization（工具授权）</b><span>判断工具能否执行</span></div>
+        <div><b>4. Tool Execution（工具执行）</b><span>只读并发，写操作串行</span></div>
+        <div><b>5. Recovery（错误恢复）</b><span>超限、失败、备用模型</span></div>
+        <div><b>6. Stop Check（停止判断）</b><span>结束或进入下一轮</span></div>
+      </div>
+      <div class="code-compare">
+        <pre>while (notDone) {
+  context = compactIfNeeded(context)
+  response = callLLM(context)
+  actions = authorize(response.tools)
+  result = runTools(actions)
+  context = append(result)
+}</pre>
+        <div class="plain-explain">
+          <b>不用先看懂代码</b>
+          <p>它表达的是一个学习重点：Agent 每一轮都会先整理资料，再让模型判断，然后检查权限，最后执行工具并把结果写回记忆。</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-label">08 / 工具系统</div>
+      <h2>工具是 Agent 的手脚，但每只手风险不同</h2>
+      <div class="tool-map">
+        <div class="safe"><b>Read / Glob / Grep</b><span>只读工具，可并发执行</span></div>
+        <div class="write"><b>Edit / Write</b><span>会改文件，需要独占执行</span></div>
+        <div class="danger"><b>Bash</b><span>能执行命令，需要授权和沙箱</span></div>
+        <div class="external"><b>MCP Tool（MCP 工具）</b><span>外部服务动态提供，按服务授权</span></div>
+      </div>
+      <p class="big-takeaway">学习重点：工具越能改变真实世界，越需要权限、沙箱和记录。只读工具和写入工具不能用同一套规则。</p>
+    </section>
+
+    <section>
+      <div class="section-label">09 / Live Demo（实时演示） B</div>
+      <h2>只读工具可以并发，写操作必须排队</h2>
+      <div class="demo-layout wide">
+        <div class="demo-panel">
+          <div class="queue" id="toolQueue">
+            <button data-tool="read">Read</button>
+            <button data-tool="grep">Grep</button>
+            <button data-tool="edit">Edit</button>
+            <button data-tool="bash">Bash</button>
+          </div>
+          <button class="demo-button secondary" id="toolReset">重置</button>
+        </div>
+        <div class="timeline-bars" id="toolTimeline"></div>
+      </div>
+      <p class="note-line">理解方式：只读动作像“同时看几份资料”；写入动作像“真正动手改东西”，必须一个个确认和执行。</p>
+    </section>
+
+    <section>
+      <div class="section-label">10 / Context（上下文）</div>
+      <h2>Context Window（上下文窗口）：模型工作台有限</h2>
+      <div class="analogy">
+        <div>
+          <h3>人类工作台</h3>
+          <p>桌面太乱时，你会把旧资料归档，只留下当前任务相关内容。</p>
+        </div>
+        <div>
+          <h3>LLM 工作台</h3>
+          <p>上下文太长时，系统要截断、折叠或总结，否则请求会超限或成本变高。</p>
+        </div>
+      </div>
+      <div class="context-box">
+        <span>需求</span><span>代码片段</span><span>工具结果</span><span>错误日志</span><span>历史对话</span><span>项目规则</span>
+      </div>
+      <p class="muted">Context Window 直译是“上下文窗口”，可以理解为模型一次能看见的资料上限。</p>
+    </section>
+
+    <section>
+      <div class="section-label">11 / Live Demo（实时演示） C</div>
+      <h2>Context Compaction（上下文压缩）：先用便宜策略</h2>
+      <div class="compress-demo">
+        <div class="budget-meter">
+          <div class="budget-fill" id="budgetFill"></div>
+          <span id="budgetText">96% 使用中</span>
+        </div>
+        <div class="compress-actions">
+          <button data-compress="tool">Tool Truncation（截断工具结果）</button>
+          <button data-compress="snip">History Snip（丢弃最旧消息）</button>
+          <button data-compress="micro">Microcompact（微压缩）</button>
+          <button data-compress="collapse">Context Collapse（上下文折叠）</button>
+          <button data-compress="summary">LLM Summary（LLM 摘要）</button>
+        </div>
+        <div class="compress-log" id="compressLog">当前上下文接近上限，优先尝试低成本压缩。</div>
+      </div>
+      <p class="note-line">cheapest-first（成本优先）：能用便宜办法解决，就不调用昂贵的 LLM Summary（LLM 摘要）。</p>
+    </section>
+
+    <section>
+      <div class="section-label">12 / Permission System（权限系统）</div>
+      <h2>Permission System（权限系统）：行动边界</h2>
+      <div class="security-flow">
+        <div><b>Pre-filtering（预过滤）</b><span>明显禁止的工具直接挡掉</span></div>
+        <div><b>Hook（钩子）</b><span>用户脚本可以检查或改参数</span></div>
+        <div><b>Rule Evaluation（规则评估）</b><span>匹配 allow / deny 规则</span></div>
+        <div><b>Human Confirmation（人工确认）</b><span>不确定或高风险动作问用户</span></div>
+      </div>
+      <div class="quote-box">学习重点：Agent 的价值来自自主性，但人类必须保留对行动边界的控制。</div>
+    </section>
+
+    <section>
+      <div class="section-label">13 / Live Demo（实时演示） D</div>
+      <h2>Permission Check（权限判断）：参数决定风险</h2>
+      <div class="permission-demo">
+        <div class="permission-scenarios" aria-label="Permission check scenarios">
+          <button class="permission-scenario active" data-tool="read" data-target="project">
+            <span>Read（读取）</span>
+            <b>读取项目文件</b>
+            <em>低风险，只看不改</em>
+          </button>
+          <button class="permission-scenario" data-tool="edit" data-target="project">
+            <span>Edit（编辑）</span>
+            <b>修改项目代码</b>
+            <em>会改变工作区</em>
+          </button>
+          <button class="permission-scenario" data-tool="read" data-target="secret">
+            <span>Read（读取）</span>
+            <b>读取密钥文件</b>
+            <em>涉及敏感信息</em>
+          </button>
+          <button class="permission-scenario" data-tool="bash" data-target="system">
+            <span>Bash（命令）</span>
+            <b>操作系统目录</b>
+            <em>越过安全边界</em>
+          </button>
+        </div>
+        <div class="permission-result" id="permResult">选择一个场景，查看权限系统会如何判断。</div>
+      </div>
+      <p class="note-line">理解方式：权限不是只看“工具名”，还要看路径、参数、运行模式和历史授权。</p>
+    </section>
+
+    <section>
+      <div class="section-label">14 / Multi-Agent（多 Agent）</div>
+      <h2>Multi-Agent（多 Agent）：把任务拆给隔离子执行体</h2>
+      <div class="agent-tree">
+        <div class="agent-node root">主 Agent<br><span>理解目标，汇总结果</span></div>
+        <div class="branch">
+          <div class="agent-node">子 Agent A<br><span>读代码</span></div>
+          <div class="agent-node">子 Agent B<br><span>跑测试</span></div>
+          <div class="agent-node">子 Agent C<br><span>查文档</span></div>
+        </div>
+      </div>
+      <div class="three-points">
+        <div>Context Isolation（上下文隔离）：子 Agent 不污染主会话</div>
+        <div>Tool Restriction（工具受限）：每个子 Agent 只能用授权工具</div>
+        <div>Result Handoff（结果回传）：最终以文本总结交回主 Agent</div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-label">15 / MCP（模型上下文协议）</div>
+      <h2>MCP（模型上下文协议）：统一接外部工具</h2>
+      <div class="mcp-diagram">
+        <div>Claude Code<span>MCP Client · MCP 客户端</span></div>
+        <div class="arrow">JSON-RPC</div>
+        <div>MCP Server<span>MCP 服务端 · 工具提供方</span></div>
+        <div class="arrow">Tool Call</div>
+        <div>外部系统<br><span>数据库 / Git / Jira / 内部服务</span></div>
+      </div>
+      <pre class="compact-code">{
+  "name": "web_search",
+  "description": "搜索网页获取最新信息",
+  "input_schema": { "query": "string" }
+}</pre>
+      <p class="muted">MCP Server 保留英文是协议名；中文解释是“模型上下文协议服务端”。</p>
+    </section>
+
+    <section>
+      <div class="section-label">16 / 扩展机制</div>
+      <h2>为什么有 4 种扩展机制，而不是全靠 MCP？</h2>
+      <div class="extension-matrix">
+        <div data-accent="green"><b>MCP</b><span>扩展 Capability Boundary（能力边界）：多一个外部工具</span></div>
+        <div data-accent="blue"><b>Hooks（钩子）</b><span>扩展 Control Boundary（控制边界）：执行前后插入检查</span></div>
+        <div data-accent="purple"><b>Skills（技能）</b><span>扩展 Knowledge Boundary（知识边界）：注入任务方法和领域规范</span></div>
+        <div data-accent="orange"><b>Plugins（插件）</b><span>扩展 Integration Boundary（集成边界）：打包技能、工具、连接器</span></div>
+      </div>
+      <p class="big-takeaway">不同机制解决不同层级的问题。强行统一，反而会让每种场景都很别扭。</p>
+    </section>
+
+    <section>
+      <div class="section-label">17 / 设计哲学</div>
+      <h2>这套架构真正值得学的是边界感</h2>
+      <div class="principle-list">
+        <div><b>Human Authority（人类决策权威）</b><span>目标和高风险动作仍由人控制。</span></div>
+        <div><b>Safety & Privacy（安全与隐私）</b><span>权限、沙箱、日志遮蔽缺一不可。</span></div>
+        <div><b>Reliable Execution（可靠执行）</b><span>工具失败、超限、重试都要可恢复。</span></div>
+        <div><b>Capability Amplification（能力放大）</b><span>让模型能调用工具，而不是只会生成文本。</span></div>
+        <div><b>Context Adaptation（上下文适应）</b><span>长任务必须管理记忆和历史。</span></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-label">18 / 给 Java 开发者</div>
+      <h2>把 Claude Code 映射到熟悉的后端概念</h2>
+      <table class="clean-table">
+        <thead><tr><th>Claude Code 概念</th><th>Java / Spring 类比</th><th>本质差异</th></tr></thead>
+        <tbody>
+          <tr><td>Agent Loop（Agent 循环）</td><td>Reactor Flux</td><td>驱动源是模型输出，不是普通数据流。</td></tr>
+          <tr><td>Context Compaction（上下文压缩）</td><td>分级 GC</td><td>“内存”是 token，成本是 API 费用。</td></tr>
+          <tr><td>Permission Pipeline（权限管线）</td><td>SecurityFilterChain</td><td>鉴权对象是 AI 即将执行的动作。</td></tr>
+          <tr><td>Concurrency Safety（工具并发安全）</td><td>ReadWriteLock</td><td>这是调度策略，不是 JVM 锁。</td></tr>
+          <tr><td>Transcript（会话记录）</td><td>Event Sourcing</td><td>记录的是人、模型、工具交互全过程。</td></tr>
+          <tr><td>SubAgent（子 Agent）</td><td>ForkJoinTask</td><td>Worker 是独立 LLM 实例。</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <div class="section-label">19 / 小白总结</div>
+      <h2>如果只记住 4 句话</h2>
+      <div class="summary-cards">
+        <div>Agent 不是“更会聊天”，而是“能闭环行动”。</div>
+        <div>LLM 做判断，工程系统做边界和恢复。</div>
+        <div>工具越强，权限、沙箱和审计越重要。</div>
+        <div>长任务的关键不是 Prompt（提示词），而是 Context Management（上下文管理）。</div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-label">20 / 现场讨论</div>
+      <h2>可以继续展开的 5 个问题</h2>
+      <ul class="discussion">
+        <li>如果接入公司内部系统，MCP Server 应该怎么做权限隔离？</li>
+        <li>订单、支付、库存这类高风险业务，哪些动作绝不能自动执行？</li>
+        <li>Agent 失败时，怎么做可观测性和问题追踪？</li>
+        <li>长期记忆应该放在文件、数据库，还是专门的知识库？</li>
+        <li>多人协作时，谁来审批 Agent 的工具调用？</li>
+      </ul>
+    </section>
+
+    <section class="roadmap-slide">
+      <div class="section-label">21 / 延展思考</div>
+      <h2>Feature Flag（功能开关）：未来能力线索</h2>
+      <div class="future-modes">
+        <div>
+          <b>Voice Mode（语音模式）</b>
+          <span>语音输入输出支持已出现线索，但更适合作为交互方式增强。</span>
+          <em>开发中</em>
+        </div>
+        <div>
+          <b>Coordinator Mode（协调器模式）</b>
+          <span>多 Worker 并行协同，类似 MapReduce（映射归约）式任务拆分。</span>
+          <em>开发中</em>
+        </div>
+        <div>
+          <b>KAIROS Mode（主动感知模式）</b>
+          <span>Agent 主动提出任务、规划行动，而不是只等待用户指令。</span>
+          <em>开发中</em>
+        </div>
+      </div>
+      <div class="research-block">
+        <h3>6 个开放研究方向（学术论文式总结）</h3>
+        <div class="research-grid">
+          <div><b>静默失败与可观测性缺口</b><span>Agent 失败时往往无声，需要更好的追踪和评估框架。</span></div>
+          <div><b>记忆作为一等公民</b><span>跨 session 的长期记忆不能只依赖 CLAUDE.md，需要系统级方案。</span></div>
+          <div><b>Harness 边界演化</b><span>在哪里、何时、做什么、与谁协作，边界和置信任度会动态调整。</span></div>
+          <div><b>架构解耦</b><span>推理、执行、会话三层进一步分离，允许独立扩展和替换。</span></div>
+          <div><b>治理与监督</b><span>随 Agent 自主性增强，需要在规模上维持人类监督。</span></div>
+          <div><b>主动架构</b><span>从响应式（等待输入）转向主动式（主动感知、规划、行动）。</span></div>
+        </div>
+      </div>
+      <p class="source-note">注意：这些更适合作为架构观察和研究线索，不应解读为官方路线图或确定承诺。</p>
+    </section>
+
+    <section class="ending">
+      <div class="kicker">End</div>
+      <h2>核心不是“让 AI 替你写代码”</h2>
+      <p class="lead">而是设计一个有边界、有工具、有记忆、有审计的工程执行系统。</p>
+      <p class="muted">Reveal.js 实时演示版 · 基于原始 HTML 内容重组</p>
+    </section>
+
+  </div>
+</div>
+
+<script src="./vendor/reveal/dist/reveal.js"></script>
+<script src="./vendor/reveal/plugin/notes/notes.js"></script>
+<script src="./app.js"></script>
+</body>
+</html>

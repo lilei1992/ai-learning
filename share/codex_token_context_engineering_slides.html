@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>为什么优秀工程师的 Codex Token 消耗只有普通人的 1/10</title>
+  <style>
+    :root {
+      --bg: #f7f7f5;
+      --card: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --accent: #111827;
+      --code: #f3f4f6;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    .deck {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+
+    .slide {
+      display: none;
+      width: 100%;
+      height: 100%;
+      padding: 72px 88px;
+      background: var(--card);
+    }
+
+    .slide.active {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .kicker {
+      font-size: 18px;
+      color: var(--muted);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      font-size: 58px;
+      line-height: 1.12;
+      margin: 0 0 28px;
+      max-width: 1080px;
+      letter-spacing: -0.04em;
+    }
+
+    h2 {
+      font-size: 46px;
+      line-height: 1.16;
+      margin: 0 0 32px;
+      letter-spacing: -0.035em;
+    }
+
+    h3 {
+      font-size: 30px;
+      margin: 28px 0 12px;
+    }
+
+    p {
+      font-size: 25px;
+      line-height: 1.65;
+      margin: 0 0 18px;
+      color: #1f2937;
+      max-width: 1000px;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 28px;
+      max-width: 980px;
+    }
+
+    li {
+      font-size: 25px;
+      line-height: 1.75;
+      margin: 6px 0;
+    }
+
+    .big {
+      font-size: 72px;
+      line-height: 1.1;
+      letter-spacing: -0.055em;
+    }
+
+    .muted { color: var(--muted); }
+
+    .quote {
+      border-left: 6px solid var(--accent);
+      padding-left: 28px;
+      font-size: 34px;
+      line-height: 1.55;
+      max-width: 1050px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 28px;
+      max-width: 1120px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 30px;
+      background: #fff;
+    }
+
+    .card h3 {
+      margin-top: 0;
+      font-size: 28px;
+    }
+
+    .code {
+      background: var(--code);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 24px 28px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 24px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      max-width: 1050px;
+    }
+
+    .formula {
+      font-size: 38px;
+      line-height: 1.65;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .tag {
+      display: inline-block;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 16px;
+      font-size: 18px;
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+
+    .progress {
+      position: fixed;
+      left: 0;
+      bottom: 0;
+      height: 5px;
+      background: var(--accent);
+      width: 0;
+      transition: width .2s ease;
+      z-index: 10;
+    }
+
+    .page {
+      position: fixed;
+      right: 28px;
+      bottom: 22px;
+      font-size: 14px;
+      color: var(--muted);
+      z-index: 11;
+    }
+
+    .hint {
+      position: fixed;
+      left: 28px;
+      bottom: 20px;
+      font-size: 14px;
+      color: var(--muted);
+      z-index: 11;
+    }
+
+    .center { align-items: center; text-align: center; }
+    .center p, .center h1, .center h2 { margin-left: auto; margin-right: auto; }
+
+    @media print {
+      body { overflow: visible; background: #fff; }
+      .deck { height: auto; }
+      .slide { display: flex !important; page-break-after: always; height: 100vh; }
+      .progress, .page, .hint { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="deck">
+    <section class="slide active center">
+      <div class="tag">Context Engineering</div>
+      <h1>为什么优秀工程师的 Codex Token 消耗只有普通人的 1/10</h1>
+      <p class="muted">让团队学会按需动态组装上下文</p>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">01 Token 为什么爆炸</div>
+      <h2>问题不是模型不够强，而是上下文太脏</h2>
+      <ul>
+        <li>把整个项目源码喂给模型</li>
+        <li>携带大量无关历史对话</li>
+        <li>粘贴几十 MB 日志</li>
+        <li>需求只改 10 行，输入却几十万 Token</li>
+      </ul>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">错误做法</div>
+      <h2>项目全量喂给模型</h2>
+      <div class="code">src/
+├── controller/
+├── service/
+├── dao/
+├── mq/
+├── es/
+├── payment/
+├── user/
+└── 5000+ files</div>
+      <p class="muted">模型会读，但不代表这些信息都有价值。</p>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">正确做法</div>
+      <h2>按需动态组装上下文</h2>
+      <div class="code">当前任务
++ 当前文件
++ 调用链相关代码
++ 业务规则摘要
++ 必要历史结论</div>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">02 Context Window</div>
+      <h2>模型看到的不是项目，而是一个超长文本</h2>
+      <p>Codex 不会天然理解你的仓库、目录、历史背景。</p>
+      <p>它真正能处理的，是你塞进 Context Window 的内容。</p>
+      <p class="quote">Garbage In，Garbage Out。</p>
+    </section>
+
+    <section class="slide center">
+      <div class="kicker">核心公式</div>
+      <h2>Context 应该只包含必要信号</h2>
+      <div class="formula">Context = 当前任务 + 相关代码 + 相关文档 + 必要历史</div>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">不要包含</div>
+      <h2>这些都是 Token 噪音</h2>
+      <div class="grid">
+        <div class="card"><h3>无关代码</h3><p>不在调用链、不影响本次变更的代码。</p></div>
+        <div class="card"><h3>无关日志</h3><p>重复 INFO、DEBUG、历史运行日志。</p></div>
+        <div class="card"><h3>无关对话</h3><p>讨论过程、废弃方案、闲聊记录。</p></div>
+        <div class="card"><h3>无关文档</h3><p>整篇设计稿、过期说明、背景材料。</p></div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">03 成本分析</div>
+      <h2>真正贵的是 Input Token</h2>
+      <div class="grid">
+        <div class="card"><h3>普通方式</h3><p class="big">120k</p><p class="muted">Input Tokens</p></div>
+        <div class="card"><h3>优秀方式</h3><p class="big">8k</p><p class="muted">Input Tokens</p></div>
+      </div>
+      <p>输出代码可能差不多，但成本相差 10 倍以上。</p>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">04 六个降本技巧</div>
+      <h2>让 Token 花在刀刃上</h2>
+      <ul>
+        <li>只提供相关代码</li>
+        <li>按需动态检索，不预加载全部内容</li>
+        <li>压缩历史，只保留结论</li>
+        <li>裁剪日志，只保留错误、堆栈、关键参数</li>
+        <li>文档摘要化，只保留规则和约束</li>
+        <li>建设团队项目知识库和 AGENTS.md</li>
+      </ul>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">技巧示例</div>
+      <h2>日志应该这样喂</h2>
+      <div class="grid">
+        <div class="card"><h3>错误</h3><div class="code">50MB full.log</div></div>
+        <div class="card"><h3>正确</h3><div class="code">Exception
+StackTrace
+Request ID
+关键入参
+最近一次变更</div></div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">05 真实项目案例</div>
+      <h2>新增订单超时状态</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>普通工程师</h3>
+          <ul>
+            <li>订单模块全部代码</li>
+            <li>MQ / ES / 支付 / 用户全部带入</li>
+            <li>输入约 120000 Token</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>优秀工程师</h3>
+          <ul>
+            <li>OrderStatusEnum</li>
+            <li>OrderService 相关方法</li>
+            <li>相关单测</li>
+            <li>需求和验收标准</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide center">
+      <div class="kicker">本质差异</div>
+      <h2>不是 Prompt 能力，而是 Context Engineering 能力</h2>
+      <p>普通工程师在优化 Prompt。</p>
+      <p>优秀工程师在优化 Context。</p>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">06 团队规范</div>
+      <h2>团队统一上下文输入标准</h2>
+      <div class="code">每次请求 Codex 前，必须说明：
+
+1. 当前任务
+2. 相关代码范围
+3. 相关业务规则
+4. 不允许修改的边界
+5. 期望输出格式</div>
+    </section>
+
+    <section class="slide">
+      <div class="kicker">AGENTS.md 模板</div>
+      <h2>把团队规范写进项目根目录</h2>
+      <div class="code"># AGENTS.md
+
+## Context Rules
+Context = 当前任务 + 相关代码 + 相关文档 + 必要历史
+
+禁止加入：
+- 无关代码
+- 无关日志
+- 无关文档
+- 无关历史对话
+
+## Code Change Rules
+- 最小修改
+- 向后兼容
+- 保持现有风格
+- 禁止无关重构</div>
+    </section>
+
+    <section class="slide center">
+      <div class="kicker">Final</div>
+      <h2 class="big">Less Context<br>More Signal</h2>
+      <p class="muted">Less Tokens · More Accuracy</p>
+    </section>
+  </main>
+
+  <div class="hint">← / → 翻页，P 打印 PDF</div>
+  <div class="page" id="page"></div>
+  <div class="progress" id="progress"></div>
+
+  <script>
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    const page = document.getElementById('page');
+    const progress = document.getElementById('progress');
+    let index = 0;
+
+    function show(i) {
+      index = Math.max(0, Math.min(i, slides.length - 1));
+      slides.forEach((slide, n) => slide.classList.toggle('active', n === index));
+      page.textContent = `${index + 1} / ${slides.length}`;
+      progress.style.width = `${((index + 1) / slides.length) * 100}%`;
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (['ArrowRight', 'PageDown', ' '].includes(e.key)) show(index + 1);
+      if (['ArrowLeft', 'PageUp'].includes(e.key)) show(index - 1);
+      if (e.key.toLowerCase() === 'p') window.print();
+    });
+
+    document.addEventListener('click', () => show(index + 1));
+    show(0);
+  </script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+{
+  "name": "codex-pet-icons",
+  "description": "Codex 宠物图标本地原创初始化包",
+  "version": "0.1.0",
+  "icons": [
+    {
+      "id": "codex-paw-line",
+      "file": "icons/codex-paw-line.svg",
+      "style": "极简线性",
+      "recommendedUse": "默认款、工具栏、侧边栏"
+    },
+    {
+      "id": "codex-cat-terminal",
+      "file": "icons/codex-cat-terminal.svg",
+      "style": "黑白终端徽章",
+      "recommendedUse": "深色主题、开发者头像"
+    },
+    {
+      "id": "codex-fox-soft",
+      "file": "icons/codex-fox-soft.svg",
+      "style": "软萌彩色",
+      "recommendedUse": "AI companion、轻松语气"
+    },
+    {
+      "id": "codex-dragon-badge",
+      "file": "icons/codex-dragon-badge.svg",
+      "style": "游戏化徽章",
+      "recommendedUse": "个性化助手、演示页"
+    },
+    {
+      "id": "codex-owl-guardian",
+      "file": "icons/codex-owl-guardian.svg",
+      "style": "守护者风格",
+      "recommendedUse": "审查、质量门禁、安全感"
+    }
+  ]
+}

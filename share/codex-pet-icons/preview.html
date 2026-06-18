@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Codex 宠物图标预览</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f7f8fb;
+        --fg: #172033;
+        --muted: #697386;
+        --panel: #ffffff;
+        --border: #dce2ea;
+        --accent: #2773ff;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #101318;
+          --fg: #eef2f7;
+          --muted: #98a2b3;
+          --panel: #171c23;
+          --border: #2b3442;
+          --accent: #6aa4ff;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--fg);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Microsoft YaHei", sans-serif;
+      }
+
+      main {
+        width: min(1120px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 40px 0;
+      }
+
+      header {
+        margin-bottom: 24px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+        line-height: 1.2;
+        font-weight: 700;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 16px;
+      }
+
+      .card {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--panel);
+        padding: 18px;
+      }
+
+      .icon-wrap {
+        display: grid;
+        place-items: center;
+        width: 112px;
+        height: 112px;
+        margin-bottom: 16px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--panel) 86%, var(--accent));
+      }
+
+      img {
+        width: 72px;
+        height: 72px;
+        display: block;
+      }
+
+      h2 {
+        margin: 0 0 6px;
+        font-size: 16px;
+        line-height: 1.3;
+      }
+
+      .meta {
+        margin: 0 0 12px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      code {
+        display: block;
+        overflow-wrap: anywhere;
+        color: var(--accent);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Codex 宠物图标预览</h1>
+        <p>本地原创 SVG 草案，按不同使用场景初始化。</p>
+      </header>
+      <section class="grid" aria-label="图标列表">
+        <article class="card">
+          <div class="icon-wrap"><img src="icons/codex-paw-line.svg" alt="极简线性爪印图标" /></div>
+          <h2>极简线性</h2>
+          <p class="meta">默认款、工具栏、侧边栏</p>
+          <code>icons/codex-paw-line.svg</code>
+        </article>
+        <article class="card">
+          <div class="icon-wrap"><img src="icons/codex-cat-terminal.svg" alt="黑白终端猫图标" /></div>
+          <h2>黑白终端徽章</h2>
+          <p class="meta">深色主题、开发者头像</p>
+          <code>icons/codex-cat-terminal.svg</code>
+        </article>
+        <article class="card">
+          <div class="icon-wrap"><img src="icons/codex-fox-soft.svg" alt="软萌狐狸图标" /></div>
+          <h2>软萌彩色</h2>
+          <p class="meta">AI companion、轻松语气</p>
+          <code>icons/codex-fox-soft.svg</code>
+        </article>
+        <article class="card">
+          <div class="icon-wrap"><img src="icons/codex-dragon-badge.svg" alt="游戏化小龙徽章图标" /></div>
+          <h2>游戏化徽章</h2>
+          <p class="meta">个性化助手、演示页</p>
+          <code>icons/codex-dragon-badge.svg</code>
+        </article>
+        <article class="card">
+          <div class="icon-wrap"><img src="icons/codex-owl-guardian.svg" alt="守护者猫头鹰图标" /></div>
+          <h2>守护者风格</h2>
+          <p class="meta">审查、质量门禁、安全感</p>
+          <code>icons/codex-owl-guardian.svg</code>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

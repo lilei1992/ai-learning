@@ -1,0 +1,1312 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Codex Agent Runtime：架构、记忆与扩展机制</title>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --paper: #ffffff;
+      --paper-soft: #f9fafc;
+      --ink: #172033;
+      --text: #344054;
+      --muted: #667085;
+      --line: #d9dee8;
+      --line-soft: #e8ecf3;
+      --brand: #176b87;
+      --brand-dark: #0f5069;
+      --brand-soft: #e8f4f7;
+      --green: #217a63;
+      --green-soft: #eaf7f2;
+      --amber: #9a6216;
+      --amber-soft: #fff5df;
+      --red: #b42318;
+      --red-soft: #fff0ee;
+      --blue: #2359a8;
+      --blue-soft: #edf4ff;
+      --shadow: 0 18px 48px rgba(22, 32, 51, .08);
+      --radius: 8px;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background:
+        linear-gradient(180deg, rgba(23, 107, 135, .08), transparent 360px),
+        radial-gradient(circle at 12% 8%, rgba(33, 122, 99, .12), transparent 260px),
+        var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 17px;
+      line-height: 1.72;
+      letter-spacing: 0;
+    }
+
+    a {
+      color: var(--brand-dark);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .page {
+      display: grid;
+      grid-template-columns: minmax(240px, 284px) minmax(0, 1fr);
+      gap: 28px;
+      width: min(1440px, calc(100% - 48px));
+      margin: 0 auto;
+      padding: 28px 0 64px;
+    }
+
+    .toc {
+      position: sticky;
+      top: 20px;
+      align-self: start;
+      max-height: calc(100vh - 40px);
+      overflow: auto;
+      padding: 18px;
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, .86);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .toc-title {
+      margin: 0 0 12px;
+      color: var(--ink);
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .toc a {
+      display: block;
+      margin: 3px 0;
+      padding: 7px 9px;
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.35;
+      text-decoration: none;
+    }
+
+    .toc a.active {
+      background: var(--brand-soft);
+      color: var(--brand-dark);
+      font-weight: 700;
+    }
+
+    .content {
+      min-width: 0;
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 56px;
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius);
+      background:
+        linear-gradient(135deg, rgba(23, 107, 135, .98), rgba(13, 43, 62, .96)),
+        #123;
+      box-shadow: var(--shadow);
+      color: #eef9fb;
+    }
+
+    .hero:after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(rgba(255, 255, 255, .08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, .07) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: linear-gradient(120deg, transparent, black 18%, black 72%, transparent);
+      pointer-events: none;
+    }
+
+    .hero-inner {
+      position: relative;
+      z-index: 1;
+      max-width: 900px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 18px;
+      color: #b6f0e0;
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .04em;
+    }
+
+    .eyebrow:before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #73e2bd;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+      color: var(--ink);
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .hero h1 {
+      color: #ffffff;
+      font-size: clamp(40px, 6vw, 72px);
+      line-height: 1.08;
+      font-weight: 850;
+    }
+
+    .hero h1 span {
+      display: block;
+    }
+
+    .hero h1 .title-sub-part {
+      display: inline-block;
+      white-space: nowrap;
+    }
+
+    .hero p {
+      max-width: 780px;
+      margin: 22px 0 0;
+      color: #d6ebf0;
+      font-size: 22px;
+      line-height: 1.58;
+    }
+
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 28px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 32px;
+      padding: 6px 11px;
+      border: 1px solid rgba(255, 255, 255, .22);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .11);
+      color: #eef9fb;
+      font-family: var(--mono);
+      font-size: 13px;
+    }
+
+    .section {
+      margin-top: 24px;
+      padding: 32px;
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius);
+      background: var(--paper);
+      box-shadow: 0 10px 34px rgba(22, 32, 51, .045);
+    }
+
+    .section-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .section-kicker {
+      color: var(--brand);
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    h2 {
+      font-size: clamp(26px, 3vw, 34px);
+      font-weight: 820;
+    }
+
+    h3 {
+      margin-top: 24px;
+      font-size: 21px;
+      font-weight: 800;
+    }
+
+    p {
+      margin: 12px 0;
+    }
+
+    ul,
+    ol {
+      margin: 12px 0 0;
+      padding-left: 1.25em;
+    }
+
+    li + li {
+      margin-top: 6px;
+    }
+
+    .lead-grid,
+    .card-grid,
+    .two-col,
+    .three-col {
+      display: grid;
+      gap: 16px;
+    }
+
+    .lead-grid {
+      grid-template-columns: 1.05fr .95fr;
+      align-items: stretch;
+    }
+
+    .two-col {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .three-col {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .card {
+      min-width: 0;
+      padding: 18px;
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius);
+      background: var(--paper-soft);
+    }
+
+    .card strong {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--ink);
+      font-size: 18px;
+      line-height: 1.35;
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15.5px;
+      line-height: 1.62;
+    }
+
+    .tag {
+      display: inline-block;
+      margin-bottom: 10px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--blue-soft);
+      color: var(--blue);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .callout {
+      margin: 18px 0;
+      padding: 16px 18px;
+      border: 1px solid var(--line-soft);
+      border-left: 5px solid var(--brand);
+      border-radius: var(--radius);
+      background: var(--brand-soft);
+    }
+
+    .callout.warning {
+      border-left-color: var(--amber);
+      background: var(--amber-soft);
+    }
+
+    .callout.danger {
+      border-left-color: var(--red);
+      background: var(--red-soft);
+    }
+
+    .callout.success {
+      border-left-color: var(--green);
+      background: var(--green-soft);
+    }
+
+    .callout strong {
+      color: var(--ink);
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin: 20px 0;
+    }
+
+    .flow-step {
+      position: relative;
+      min-height: 132px;
+      padding: 15px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, #ffffff, #f8fafc);
+    }
+
+    .flow-step:not(:last-child):after {
+      content: ">";
+      position: absolute;
+      top: 50%;
+      right: -11px;
+      z-index: 2;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--brand);
+      color: #fff;
+      font: 800 13px/20px var(--mono);
+      text-align: center;
+      transform: translateY(-50%);
+    }
+
+    .flow-step b {
+      display: block;
+      color: var(--ink);
+      font-size: 17px;
+      line-height: 1.35;
+    }
+
+    .flow-step span {
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14.5px;
+      line-height: 1.5;
+    }
+
+    .stack {
+      display: grid;
+      gap: 10px;
+    }
+
+    .stack-row {
+      display: grid;
+      grid-template-columns: 176px 1fr;
+      gap: 12px;
+      padding: 13px 15px;
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius);
+      background: var(--paper-soft);
+    }
+
+    .stack-row b {
+      color: var(--brand-dark);
+      font-family: var(--mono);
+      font-size: 14px;
+    }
+
+    .stack-row span {
+      color: var(--text);
+      font-size: 15.5px;
+      line-height: 1.55;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      margin: 16px 0;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--paper);
+      font-size: 15px;
+    }
+
+    th,
+    td {
+      padding: 13px 14px;
+      border-bottom: 1px solid var(--line-soft);
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      background: #eef3f7;
+      color: var(--ink);
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    tbody tr:nth-child(even) td {
+      background: #fbfcfe;
+    }
+
+    .code-card {
+      margin: 16px 0;
+      overflow: hidden;
+      border: 1px solid #253449;
+      border-radius: var(--radius);
+      background: #101828;
+    }
+
+    .code-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, .1);
+      color: #c7d2e1;
+      font-family: var(--mono);
+      font-size: 13px;
+    }
+
+    .copy-btn {
+      appearance: none;
+      border: 1px solid rgba(255, 255, 255, .18);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, .08);
+      color: #e6edf7;
+      cursor: pointer;
+      font: 700 12px/1 var(--mono);
+      padding: 7px 9px;
+    }
+
+    .copy-btn:hover {
+      background: rgba(255, 255, 255, .14);
+    }
+
+    pre {
+      margin: 0;
+      overflow: auto;
+      padding: 18px;
+    }
+
+    code {
+      font-family: var(--mono);
+      font-size: .94em;
+    }
+
+    pre code {
+      color: #e6edf7;
+      font-size: 14px;
+      line-height: 1.65;
+      white-space: pre;
+    }
+
+    .kbd {
+      display: inline-block;
+      padding: 1px 6px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: #fff;
+      color: var(--ink);
+      font-family: var(--mono);
+      font-size: .88em;
+    }
+
+    .check-list {
+      display: grid;
+      gap: 10px;
+      margin: 16px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .check-list li {
+      padding: 12px 14px;
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius);
+      background: var(--paper-soft);
+    }
+
+    .check-list li:before {
+      content: "✓";
+      margin-right: 8px;
+      color: var(--green);
+      font-weight: 900;
+    }
+
+    .mistake-list {
+      display: grid;
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .mistake {
+      padding: 15px;
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius);
+      background: #fff;
+    }
+
+    .mistake b {
+      display: block;
+      color: var(--red);
+      margin-bottom: 6px;
+    }
+
+    .summary-band {
+      padding: 26px;
+      border-radius: var(--radius);
+      background: linear-gradient(135deg, var(--green-soft), var(--brand-soft));
+      border: 1px solid var(--line-soft);
+    }
+
+    .back-top {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      z-index: 10;
+      display: none;
+      width: 44px;
+      height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--ink);
+      color: #fff;
+      box-shadow: var(--shadow);
+      cursor: pointer;
+      font: 900 18px/44px var(--mono);
+      text-align: center;
+    }
+
+    .back-top.show {
+      display: block;
+    }
+
+    @media (max-width: 1080px) {
+      .page {
+        grid-template-columns: 1fr;
+      }
+
+      .toc {
+        position: static;
+        max-height: none;
+      }
+
+      .toc-links {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 4px;
+      }
+
+      .flow {
+        grid-template-columns: 1fr;
+      }
+
+      .flow-step:not(:last-child):after {
+        top: auto;
+        right: 50%;
+        bottom: -11px;
+        transform: translateX(50%) rotate(90deg);
+      }
+    }
+
+    @media (max-width: 760px) {
+      body {
+        font-size: 16px;
+      }
+
+      .page {
+        width: min(100% - 24px, 1440px);
+        padding-top: 12px;
+      }
+
+      .hero,
+      .section {
+        padding: 22px;
+      }
+
+      .hero p {
+        font-size: 18px;
+      }
+
+      .hero h1 {
+        font-size: clamp(34px, 10vw, 44px);
+      }
+
+      .hero h1 .title-sub-part {
+        display: block;
+      }
+
+      .lead-grid,
+      .two-col,
+      .three-col,
+      .toc-links {
+        grid-template-columns: 1fr;
+      }
+
+      .section-header {
+        display: block;
+      }
+
+      .section-kicker {
+        display: block;
+        margin-top: 8px;
+      }
+
+      .stack-row {
+        grid-template-columns: 1fr;
+      }
+
+      table {
+        display: block;
+        overflow-x: auto;
+      }
+
+      th,
+      td {
+        min-width: 140px;
+      }
+    }
+
+    @media print {
+      body {
+        background: #fff;
+        color: #111827;
+        font-size: 12pt;
+      }
+
+      .page {
+        display: block;
+        width: 100%;
+        padding: 0;
+      }
+
+      .toc,
+      .back-top,
+      .copy-btn {
+        display: none !important;
+      }
+
+      .hero,
+      .section {
+        break-inside: avoid;
+        box-shadow: none;
+      }
+
+      .hero {
+        color: #111827;
+        background: #eef3f7;
+      }
+
+      .hero h1,
+      .hero p {
+        color: #111827;
+      }
+
+      a {
+        color: #111827;
+        text-decoration: none;
+      }
+
+      pre {
+        white-space: pre-wrap;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <nav class="toc" aria-label="文档目录">
+      <p class="toc-title">目录</p>
+      <div class="toc-links">
+        <a href="#summary">文档摘要</a>
+        <a href="#scenarios">适用场景</a>
+        <a href="#concepts">核心概念</a>
+        <a href="#architecture">架构与流程</a>
+        <a href="#memory">记忆机制</a>
+        <a href="#extensions">扩展机制</a>
+        <a href="#comparison">表格对比</a>
+        <a href="#examples">示例代码</a>
+        <a href="#practice">最佳实践</a>
+        <a href="#mistakes">常见误区</a>
+        <a href="#prompt">可复用提示词</a>
+        <a href="#closing">总结</a>
+      </div>
+    </nav>
+
+    <main class="content">
+      <header class="hero">
+        <div class="hero-inner">
+          <div class="eyebrow">OpenAI Codex / Agent Runtime Deep Dive</div>
+          <h1><span>Codex Agent Runtime：</span><span><span class="title-sub-part">架构、记忆</span><span class="title-sub-part">与扩展机制</span></span></h1>
+          <p>面向团队内部分享的中文友好版文档。它把 Codex 解释为一个可审计、可治理、可恢复、可扩展的工程执行系统，而不只是一个会写代码的聊天助手。</p>
+          <div class="hero-meta">
+            <span class="pill">Agent Loop</span>
+            <span class="pill">Context Engineering</span>
+            <span class="pill">AGENTS.md</span>
+            <span class="pill">Memories</span>
+            <span class="pill">MCP / Skills / Plugins</span>
+          </div>
+        </div>
+      </header>
+
+      <section class="section" id="summary">
+        <div class="section-header">
+          <h2>文档摘要</h2>
+          <span class="section-kicker">01 / Summary</span>
+        </div>
+        <div class="lead-grid">
+          <div>
+            <p>Codex 的核心不是“模型会写代码”，而是“模型在工程边界内循环执行任务”。它通过 <code>Agent Loop</code> 把自然语言需求转成工具调用、文件修改、命令执行、测试验证和最终交付。</p>
+            <p>理解 Codex 时，应把它看成一套 <strong>coding agent runtime</strong>：模型负责推理，运行时负责上下文、工具、安全、记忆、审计和恢复。</p>
+            <div class="callout success">
+              <strong>30 秒结论：</strong>Codex = Agent Loop + Prompt/Context 构造 + Tool Runtime + Sandbox/Approval + Thread/Rollout + AGENTS.md/Memories + MCP/Skills/Plugins。
+            </div>
+          </div>
+          <div class="card">
+            <span class="tag">给团队的定位</span>
+            <strong>不要把 Codex 当成“自动程序员”</strong>
+            <p>更稳妥的接入方式是把它当成“带权限边界的工程执行系统”：让 agent 提出动作，让运行时限制动作，让人审批高风险动作，让审计记录全过程。</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="scenarios">
+        <div class="section-header">
+          <h2>适用场景</h2>
+          <span class="section-kicker">02 / Scenarios</span>
+        </div>
+        <div class="three-col">
+          <div class="card">
+            <span class="tag">Local CLI</span>
+            <strong>本地仓库协作</strong>
+            <p>读取项目规则、检索代码、修改文件、运行测试、解释差异，适合日常开发闭环。</p>
+          </div>
+          <div class="card">
+            <span class="tag">Cloud Agent</span>
+            <strong>长任务与并行任务</strong>
+            <p>适合异步实现、批量修复、生成 PR、代码审查和需要等待结果的工程任务。</p>
+          </div>
+          <div class="card">
+            <span class="tag">App Server</span>
+            <strong>IDE 与内部平台接入</strong>
+            <p>通过协议管理 thread、turn、event，让不同界面复用同一套 agent runtime。</p>
+          </div>
+        </div>
+        <div class="callout">
+          <strong>最适合的任务形态：</strong>目标明确、验收标准清楚、权限边界可控、能通过测试或命令验证的工程任务。
+        </div>
+      </section>
+
+      <section class="section" id="concepts">
+        <div class="section-header">
+          <h2>核心概念</h2>
+          <span class="section-kicker">03 / Concepts</span>
+        </div>
+        <div class="two-col">
+          <div class="stack">
+            <div class="stack-row"><b>Agent</b><span>能感知上下文、自主决策、调用工具并循环执行直到完成目标的系统。</span></div>
+            <div class="stack-row"><b>Agent Loop</b><span>构建上下文、模型推理、工具调用、结果写回、再次推理的闭环。</span></div>
+            <div class="stack-row"><b>Turn</b><span>从一次用户输入到 agent 返回最终消息的完整执行周期。</span></div>
+            <div class="stack-row"><b>Tool Call</b><span>模型提出的结构化外部动作，例如检索文件、执行命令、应用补丁。</span></div>
+            <div class="stack-row"><b>Harness</b><span>连接模型、工具、上下文、权限、状态的运行框架，是 Codex 的共享核心。</span></div>
+          </div>
+          <div class="stack">
+            <div class="stack-row"><b>Prompt</b><span>发送给模型的完整输入，包含系统指令、工具定义、历史和当前用户消息。</span></div>
+            <div class="stack-row"><b>Context Window</b><span>单次推理可容纳的 token 上限，需要通过摘要、截断和任务拆分管理。</span></div>
+            <div class="stack-row"><b>Prompt Caching</b><span>服务端复用相同前缀的计算结果，关键是保持静态前缀稳定。</span></div>
+            <div class="stack-row"><b>Rollout</b><span>一次 agent 会话的完整执行轨迹，可用于恢复、复盘和记忆提炼。</span></div>
+            <div class="stack-row"><b>ZDR</b><span>Zero Data Retention，零数据留存。Codex 的无状态请求设计服务于企业合规。</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="architecture">
+        <div class="section-header">
+          <h2>架构与流程说明</h2>
+          <span class="section-kicker">04 / Architecture</span>
+        </div>
+        <h3>五层边界</h3>
+        <div class="flow" aria-label="Codex 五层架构">
+          <div class="flow-step"><b>Surface</b><span>CLI、TUI、IDE、Web 入口，负责输入、展示和审批交互。</span></div>
+          <div class="flow-step"><b>Protocol</b><span>App Server / JSON-RPC，管理 thread、turn、event。</span></div>
+          <div class="flow-step"><b>Runtime</b><span>Core Session 构建上下文、调用模型、控制 agent loop。</span></div>
+          <div class="flow-step"><b>Tools</b><span>ToolRouter、Registry、Orchestrator、exec、sandbox、approval。</span></div>
+          <div class="flow-step"><b>State</b><span>Thread store、transcript、rollout、checkpoint、compact。</span></div>
+        </div>
+
+        <h3>Agent Loop 单轮流程</h3>
+        <div class="code-card">
+          <div class="code-head"><span>agent-loop.txt</span><button class="copy-btn" type="button">复制</button></div>
+          <pre><code>用户输入
+  -> 构造 Prompt：system + tools + instructions + history + current user message
+  -> POST /v1/responses
+  -> 解析模型输出
+     -> 如果是 tool call：执行工具，追加 tool result，继续推理
+     -> 如果是 assistant message：结束本轮 turn，交还控制权</code></pre>
+        </div>
+
+        <div class="callout warning">
+          <strong>关键理解：</strong>模型只提出下一步意图，真实动作由运行时执行。工具路由、审批、沙箱、错误处理和结果记录都不应该交给提示词“自觉完成”。
+        </div>
+      </section>
+
+      <section class="section" id="memory">
+        <div class="section-header">
+          <h2>记忆机制</h2>
+          <span class="section-kicker">05 / Memory</span>
+        </div>
+        <p>Codex 的记忆机制可以理解为双层架构：<code>AGENTS.md</code> 是人工维护的静态规则层，<code>Memories</code> 是 agent 从历史会话中自动提炼的动态经验层。</p>
+        <div class="two-col">
+          <div class="card">
+            <span class="tag">Layer 1</span>
+            <strong>AGENTS.md 静态指令层</strong>
+            <p>适合放稳定规则：测试命令、代码风格、架构边界、禁改区域、权限要求。项目级文件可提交 Git，团队共享。</p>
+          </div>
+          <div class="card">
+            <span class="tag">Layer 2</span>
+            <strong>Memories 自动生成层</strong>
+            <p>适合沉淀会话中涌现的知识：bug 模式、临时决策、偏好和复盘结论。通常存储在用户本地记忆目录。</p>
+          </div>
+        </div>
+
+        <h3>加载顺序</h3>
+        <div class="flow">
+          <div class="flow-step"><b>config.toml</b><span>读取全局配置、模型、权限和 memories 开关。</span></div>
+          <div class="flow-step"><b>Global AGENTS</b><span>读取用户级 <code>~/.codex/AGENTS.md</code> 或 override。</span></div>
+          <div class="flow-step"><b>Project AGENTS</b><span>从 repo root 到 cwd 逐层收集项目规则。</span></div>
+          <div class="flow-step"><b>Memories</b><span>按配置读取自动记忆摘要。</span></div>
+          <div class="flow-step"><b>Prompt</b><span>合并为 developer 指令，注入本次上下文。</span></div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>记忆类型</th>
+              <th>维护方式</th>
+              <th>适用内容</th>
+              <th>团队共享</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>AGENTS.md</code></td>
+              <td>人工编写</td>
+              <td>稳定规范、测试命令、架构边界、安全约束</td>
+              <td>可提交 Git，共享</td>
+            </tr>
+            <tr>
+              <td><code>AGENTS.override.md</code></td>
+              <td>人工编写</td>
+              <td>临时或子目录强制覆盖规则</td>
+              <td>谨慎共享，需说明原因</td>
+            </tr>
+            <tr>
+              <td><code>Memories</code></td>
+              <td>自动提炼</td>
+              <td>历史会话经验、偏好、复盘知识</td>
+              <td>默认个人本地，不自动共享</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout">
+          <strong>工程建议：</strong>让 Memories 自动积累经验，但定期把稳定、可复用、对团队有价值的内容提升到项目 <code>AGENTS.md</code>。
+        </div>
+      </section>
+
+      <section class="section" id="extensions">
+        <div class="section-header">
+          <h2>扩展机制</h2>
+          <span class="section-kicker">06 / Extensions</span>
+        </div>
+        <div class="three-col">
+          <div class="card">
+            <span class="tag">MCP</span>
+            <strong>把外部系统变成工具</strong>
+            <p>通过 Model Context Protocol 接入数据库、知识库、内部 API、发布平台。工具必须有参数约束、权限边界和审计记录。</p>
+          </div>
+          <div class="card">
+            <span class="tag">Skills</span>
+            <strong>把经验固化为工作流</strong>
+            <p>适合沉淀专项流程，例如代码审查、系统排障、文档生成、表格处理、演示文稿制作。</p>
+          </div>
+          <div class="card">
+            <span class="tag">Plugins</span>
+            <strong>组合技能、工具与应用</strong>
+            <p>适合把团队内部工具链封装为可安装能力，降低重复配置和接入成本。</p>
+          </div>
+        </div>
+        <div class="two-col" style="margin-top: 16px;">
+          <div class="card">
+            <span class="tag">Multi-Agent</span>
+            <strong>并行处理独立子任务</strong>
+            <p>适合大规模代码阅读、模块化排查、竞品/资料调研。要控制共享状态，避免多个 agent 同时写同一文件。</p>
+          </div>
+          <div class="card">
+            <span class="tag">CI/CD</span>
+            <strong>交付链路自动化</strong>
+            <p>可把构建、测试、发布、回滚检查接入 agent，但生产写操作必须使用最小权限和审批链路。</p>
+          </div>
+        </div>
+        <div class="callout danger">
+          <strong>MCP 安全边界：</strong>Codex 对原生 shell 工具有 sandbox 和 approval，第三方 MCP 工具需要 MCP Server 自己实现权限控制、参数校验和敏感数据保护。
+        </div>
+      </section>
+
+      <section class="section" id="comparison">
+        <div class="section-header">
+          <h2>表格对比</h2>
+          <span class="section-kicker">07 / Tables</span>
+        </div>
+        <h3>普通 LLM 应用 vs Codex Agent</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>维度</th>
+              <th>普通 LLM 应用</th>
+              <th>Codex Agent Runtime</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>输出形态</td>
+              <td>主要生成文字建议</td>
+              <td>能提出并执行工具调用、文件修改、命令验证</td>
+            </tr>
+            <tr>
+              <td>上下文来源</td>
+              <td>用户输入和少量历史</td>
+              <td>项目规则、仓库文件、工具 specs、历史、skills、memories</td>
+            </tr>
+            <tr>
+              <td>控制边界</td>
+              <td>依赖提示词约束</td>
+              <td>运行时策略：approval、sandbox、policy、audit</td>
+            </tr>
+            <tr>
+              <td>可恢复性</td>
+              <td>通常依赖聊天记录</td>
+              <td>thread、rollout、checkpoint、compact 支持长任务延续</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Approval Mode 对比</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>模式</th>
+              <th>文件修改</th>
+              <th>Shell 命令</th>
+              <th>适用建议</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>suggest</code></td>
+              <td>询问</td>
+              <td>询问</td>
+              <td>适合新仓库、敏感业务、不了解风险时</td>
+            </tr>
+            <tr>
+              <td><code>auto-edit</code></td>
+              <td>自动</td>
+              <td>询问</td>
+              <td>适合日常编码协作，风险和效率较平衡</td>
+            </tr>
+            <tr>
+              <td><code>full-auto</code></td>
+              <td>自动</td>
+              <td>自动</td>
+              <td>只建议在沙箱、实验环境或低风险任务使用</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="section" id="examples">
+        <div class="section-header">
+          <h2>示例代码</h2>
+          <span class="section-kicker">08 / Examples</span>
+        </div>
+        <h3>AGENTS.md 模板</h3>
+        <div class="code-card">
+          <div class="code-head"><span>AGENTS.md</span><button class="copy-btn" type="button">复制</button></div>
+          <pre><code># 项目协作规范
+
+## 语言
+- 用户可见说明使用简体中文。
+- 代码、命令、API 路径、配置 key 保持英文。
+
+## 修改规则
+- 先阅读相关代码和测试，再做最小安全修改。
+- 不做无关重构，不重排无关文件。
+- 不新增依赖，除非明确说明必要性和风险。
+
+## 验证
+- 修改后优先运行最相关测试。
+- 如果测试未运行，必须说明原因。
+- 不要声称测试通过，除非实际运行且退出码为 0。
+
+## 安全
+- 不打印 secrets、tokens、cookies、authorization headers。
+- 支付、订单、库存、权限、生产写操作必须显式说明风险。</code></pre>
+        </div>
+
+        <h3>Memories 配置示例</h3>
+        <div class="code-card">
+          <div class="code-head"><span>~/.codex/config.toml</span><button class="copy-btn" type="button">复制</button></div>
+          <pre><code>[memories]
+write_enabled = true
+read_enabled = true
+
+# 可按团队安全要求调整 AGENTS.md 读取上限
+project_doc_max_bytes = 65536
+
+# 兼容其他工具的项目规则文件
+project_doc_fallback_filenames = ["CLAUDE.md", ".cursorrules"]</code></pre>
+        </div>
+
+        <h3>Agent Loop 伪代码</h3>
+        <div class="code-card">
+          <div class="code-head"><span>agent-loop.rs</span><button class="copy-btn" type="button">复制</button></div>
+          <pre><code>loop {
+    let context = build_context(thread, project_rules, tools, memories);
+    let response = model.sample(context).await?;
+
+    if response.is_assistant_message() {
+        thread.record(response).await?;
+        break;
+    }
+
+    let calls = tool_router.parse(response)?;
+    let results = orchestrator.execute_with_policy(calls).await?;
+    thread.record(results).await?;
+}</code></pre>
+        </div>
+      </section>
+
+      <section class="section" id="practice">
+        <div class="section-header">
+          <h2>最佳实践</h2>
+          <span class="section-kicker">09 / Best Practices</span>
+        </div>
+        <ul class="check-list">
+          <li>为每个仓库维护清晰的 <code>AGENTS.md</code>，写明构建命令、测试命令、架构边界、禁改区域和审批要求。</li>
+          <li>把任务拆小：一次只交付一个可验证目标，避免上下文漂移和大范围误改。</li>
+          <li>提前声明验收标准：需要跑哪些测试、检查哪些页面、查看哪些日志。</li>
+          <li>工具最小权限：读写分离、资源范围限制、参数校验、敏感字段脱敏。</li>
+          <li>高风险动作显式审批：生产写操作、支付、库存、订单状态、权限变更都不能静默执行。</li>
+          <li>保留执行证据：transcript、命令输出、测试结果、审批记录和最终 diff 都应该可追溯。</li>
+          <li>定期清理和提升记忆：把 Memories 中稳定可靠的团队共识迁移到 <code>AGENTS.md</code>。</li>
+          <li>为扩展工具写清楚失败处理：timeout、retry、幂等、重复请求、权限不足和审计日志。</li>
+        </ul>
+      </section>
+
+      <section class="section" id="mistakes">
+        <div class="section-header">
+          <h2>常见误区</h2>
+          <span class="section-kicker">10 / Mistakes</span>
+        </div>
+        <div class="mistake-list">
+          <div class="mistake">
+            <b>误区 1：把安全写进提示词就够了</b>
+            <p>提示词不是安全边界。真实工程动作必须由 approval、sandbox、permission policy 和 audit log 约束。</p>
+          </div>
+          <div class="mistake">
+            <b>误区 2：让 agent 一次做完整个大项目</b>
+            <p>大任务会放大上下文污染、错误累积和验证困难。更可靠的方式是小任务、小闭环、持续验证。</p>
+          </div>
+          <div class="mistake">
+            <b>误区 3：Memories 可以替代 AGENTS.md</b>
+            <p>Memories 更像个人经验沉淀，不适合作为团队规范来源。稳定规则应写入项目 <code>AGENTS.md</code> 并提交 Git。</p>
+          </div>
+          <div class="mistake">
+            <b>误区 4：MCP 工具越多越好</b>
+            <p>工具越多，权限、审计、缓存命中和模型选择成本越高。每个工具都应该有明确用途和最小权限。</p>
+          </div>
+          <div class="mistake">
+            <b>误区 5：只看最终答案，不看执行证据</b>
+            <p>Agent 的可信度来自过程证据：它看了什么、改了什么、跑了什么、哪里失败、最后如何验证。</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="prompt">
+        <div class="section-header">
+          <h2>可复用提示词</h2>
+          <span class="section-kicker">11 / Prompt</span>
+        </div>
+        <p>下面是对原始提示词的优化版。它更明确地限定了产物形态、内容结构、视觉约束和输出边界，适合后续生成同类单文件技术文档。</p>
+        <div class="code-card">
+          <div class="code-head"><span>single-file-tech-doc-prompt.md</span><button class="copy-btn" type="button">复制</button></div>
+          <pre><code>你是一名资深前端工程师、技术文档设计师和技术分享讲师。
+
+请基于我提供的主题和内容，生成一个「可直接本地打开、可分享、可复制到飞书/语雀/内部 wiki 的单文件 HTML 技术文档」。
+
+硬性要求：
+- 只输出完整 HTML 代码，不要额外解释。
+- 单文件 HTML，内联 CSS，原生 JavaScript。
+- 不依赖任何外部资源、CDN、图片、字体或框架。
+- 兼容 Chrome / Edge / Safari。
+- 响应式布局，移动端可读。
+- 支持浏览器打印为 PDF。
+- 技术名词、代码、命令、API 路径、配置 key 保持英文。
+- 用户可见说明使用简体中文。
+
+内容目标：
+- 信息层次清晰，适合技术分享和团队内部传播。
+- 先给结论，再展开细节。
+- 对复杂概念提供类比、流程、表格和代码示例。
+- 对高风险或易误解内容使用 callout 提醒。
+- 不编造事实；不确定内容标注为「需要验证」。
+
+页面模块：
+1. Hero 标题区：主题、定位、一句话摘要、关键词标签。
+2. 文档摘要：30 秒结论和适合谁读。
+3. 适用场景：说明什么时候应该使用该方案。
+4. 核心概念：用短定义解释关键术语。
+5. 架构/流程说明：用 CSS 卡片或流程图表达主流程。
+6. 表格对比：至少一张对比表，突出取舍。
+7. 示例代码：提供可复制代码块。
+8. 最佳实践：可执行的团队落地建议。
+9. 常见误区：列出错误理解和修正建议。
+10. 总结：3 到 5 条可带走的结论。
+11. 可选交互：目录高亮、返回顶部按钮、代码复制按钮。
+
+视觉要求：
+- 使用现代卡片式布局，但不要过度装饰。
+- 字体大小舒适，正文行距 1.6 到 1.8。
+- 颜色克制，主色不超过 2 个，强调色不超过 2 个。
+- 重点内容用 callout 样式突出。
+- 表格边界清晰，移动端可横向滚动。
+- 代码块使用深色背景，带标题和复制按钮。
+- 打印模式隐藏目录、按钮等交互元素。
+
+文档主题：
+【填写主题】
+
+内容素材：
+【粘贴 Markdown、笔记、代码片段或大纲】
+
+补充要求：
+【填写是否需要加入扩展章节、团队落地建议、FAQ、对比表等】</code></pre>
+        </div>
+      </section>
+
+      <section class="section" id="closing">
+        <div class="section-header">
+          <h2>总结</h2>
+          <span class="section-kicker">12 / Closing</span>
+        </div>
+        <div class="summary-band">
+          <p><strong>Codex 的价值不在于替代工程师，而在于把模型能力放进可控的工程运行时。</strong></p>
+          <p>团队真正需要建设的是上下文、权限、工具、记忆和验证体系。上下文让 agent 少猜，权限让动作受控，工具让执行落地，记忆让经验复用，验证让交付可信。</p>
+          <p>落地时请坚持一个原则：放大上下文，缩小动作半径；让 agent 做可验证的小闭环，而不是无边界的大承诺。</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <button class="back-top" type="button" aria-label="返回顶部">↑</button>
+
+  <script>
+    (function () {
+      const tocLinks = Array.from(document.querySelectorAll('.toc a'));
+      const sections = tocLinks
+        .map((link) => document.querySelector(link.getAttribute('href')))
+        .filter(Boolean);
+      const backTop = document.querySelector('.back-top');
+
+      function setActiveLink() {
+        const offset = window.scrollY + 120;
+        let current = sections[0];
+
+        for (const section of sections) {
+          if (section.offsetTop <= offset) {
+            current = section;
+          }
+        }
+
+        tocLinks.forEach((link) => {
+          link.classList.toggle('active', link.getAttribute('href') === '#' + current.id);
+        });
+
+        backTop.classList.toggle('show', window.scrollY > 640);
+      }
+
+      async function copyText(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+          return;
+        }
+
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.top = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const copied = document.execCommand('copy');
+        document.body.removeChild(textarea);
+
+        if (!copied) {
+          throw new Error('copy failed');
+        }
+      }
+
+      function selectCodeBlock(codeElement) {
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(codeElement);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+
+      document.querySelectorAll('.copy-btn').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const codeElement = button.closest('.code-card').querySelector('code');
+          const code = codeElement.innerText;
+          const oldText = button.textContent;
+          try {
+            await copyText(code);
+            button.textContent = '已复制';
+            setTimeout(() => {
+              button.textContent = oldText;
+            }, 1200);
+          } catch (error) {
+            selectCodeBlock(codeElement);
+            button.textContent = '已选中';
+            setTimeout(() => {
+              button.textContent = oldText;
+            }, 1200);
+          }
+        });
+      });
+
+      backTop.addEventListener('click', () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+
+      setActiveLink();
+      window.addEventListener('scroll', setActiveLink, { passive: true });
+      window.addEventListener('resize', setActiveLink);
+    })();
+  </script>
+</body>
+</html>

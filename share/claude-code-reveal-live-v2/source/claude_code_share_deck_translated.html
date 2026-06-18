@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code 架构深度分享</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0c10;
+  --surface: #111318;
+  --surface2: #1a1d25;
+  --border: #2a2d38;
+  --text: #e8eaf0;
+  --muted: #7a7f95;
+  --accent: #4f8ef7;
+  --accent2: #38d9a9;
+  --accent3: #f77b4f;
+  --accent4: #c97ef7;
+  --warn: #f7c94f;
+  --code-bg: #0d1117;
+  --slide-w: 900px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: 15px;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+/* ── Layout ── */
+.deck { max-width: var(--slide-w); margin: 0 auto; padding: 24px 16px 80px; }
+.slide {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  margin-bottom: 48px;
+  overflow: hidden;
+  position: relative;
+}
+.slide-header {
+  padding: 28px 36px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.slide-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  padding: 3px 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.slide-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.3;
+}
+.slide-body { padding: 28px 36px 32px; }
+/* ── Hero slide ── */
+.hero {
+  background: linear-gradient(135deg, #0d1117 0%, #111826 50%, #0d1117 100%);
+  border-color: #2a3550;
+  padding: 64px 36px 56px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -40%; left: 50%;
+  transform: translateX(-50%);
+  width: 600px; height: 400px;
+  background: radial-gradient(ellipse, rgba(79,142,247,0.12) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero-tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 20px;
+}
+.hero h1 {
+  font-size: 38px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 12px;
+}
+.hero h1 span { color: var(--accent); }
+.hero-sub {
+  font-size: 15px;
+  color: var(--muted);
+  margin-bottom: 32px;
+  line-height: 1.7;
+}
+.hero-pills { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.pill {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1px solid;
+}
+.pill-blue { color: var(--accent); border-color: rgba(79,142,247,0.3); background: rgba(79,142,247,0.08); }
+.pill-green { color: var(--accent2); border-color: rgba(56,217,169,0.3); background: rgba(56,217,169,0.08); }
+.pill-orange { color: var(--accent3); border-color: rgba(247,123,79,0.3); background: rgba(247,123,79,0.08); }
+.pill-purple { color: var(--accent4); border-color: rgba(201,126,247,0.3); background: rgba(201,126,247,0.08); }
+.pill-yellow { color: var(--warn); border-color: rgba(247,201,79,0.3); background: rgba(247,201,79,0.08); }
+/* ── Data card row ── */
+.stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+.stat-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 16px;
+  text-align: center;
+}
+.stat-num { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+.stat-label { font-size: 12px; color: var(--muted); }
+/* ── Layers ── */
+.layer-stack { display: flex; flex-direction: column; gap: 8px; }
+.layer {
+  border-radius: 10px;
+  padding: 14px 20px;
+  border: 1px solid;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.layer-icon { font-family: 'JetBrains Mono', monospace; font-size: 12px; width: 80px; flex-shrink: 0; }
+.layer-name { font-weight: 600; font-size: 14px; margin-bottom: 3px; }
+.layer-desc { font-size: 12px; color: var(--muted); }
+.layer-arrow { text-align: center; color: var(--muted); font-size: 14px; }
+.layer-purple { background: rgba(201,126,247,0.06); border-color: rgba(201,126,247,0.25); }
+.layer-purple .layer-icon { color: var(--accent4); }
+.layer-green { background: rgba(56,217,169,0.06); border-color: rgba(56,217,169,0.25); }
+.layer-green .layer-icon { color: var(--accent2); }
+.layer-orange { background: rgba(247,123,79,0.06); border-color: rgba(247,123,79,0.25); }
+.layer-orange .layer-icon { color: var(--accent3); }
+.layer-blue { background: rgba(79,142,247,0.06); border-color: rgba(79,142,247,0.25); }
+.layer-blue .layer-icon { color: var(--accent); }
+.layer-gray { background: rgba(122,127,149,0.06); border-color: rgba(122,127,149,0.25); }
+.layer-gray .layer-icon { color: var(--muted); }
+/* ── Code block ── */
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px 20px;
+  overflow-x: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+  line-height: 1.7;
+  margin-top: 16px;
+}
+.kw { color: #ff7b72; }
+.fn { color: #d2a8ff; }
+.str { color: #a5d6ff; }
+.cm { color: #6e7681; font-style: italic; }
+.ty { color: #ffa657; }
+.num { color: #79c0ff; }
+/* ── Callout ── */
+.callout {
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin-top: 16px;
+  border-left: 3px solid;
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+.callout-blue { background: rgba(79,142,247,0.07); border-color: var(--accent); color: #adc8ff; }
+.callout-green { background: rgba(56,217,169,0.07); border-color: var(--accent2); color: #8eecd8; }
+.callout-orange { background: rgba(247,123,79,0.07); border-color: var(--accent3); color: #ffc0a0; }
+.callout strong { font-weight: 700; color: var(--text); }
+/* ── Two column ── */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+/* ── List ── */
+.point-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.point-list li { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; line-height: 1.6; }
+.point-list li::before { content: '›'; color: var(--accent); font-family: 'JetBrains Mono', monospace; font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+/* ── Timeline ── */
+.timeline { display: flex; flex-direction: column; gap: 0; }
+.tl-item { display: flex; gap: 18px; padding-bottom: 20px; position: relative; }
+.tl-item:last-child { padding-bottom: 0; }
+.tl-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 17px; top: 34px; bottom: 0;
+  width: 1px; background: var(--border);
+}
+.tl-dot {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  border: 2px solid;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; font-weight: 700;
+  flex-shrink: 0;
+}
+.tl-body { padding-top: 6px; flex: 1; }
+.tl-step { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+.tl-detail { font-size: 13px; color: var(--muted); line-height: 1.6; }
+.tl-blue .tl-dot { border-color: var(--accent); color: var(--accent); background: rgba(79,142,247,0.1); }
+.tl-green .tl-dot { border-color: var(--accent2); color: var(--accent2); background: rgba(56,217,169,0.1); }
+.tl-orange .tl-dot { border-color: var(--accent3); color: var(--accent3); background: rgba(247,123,79,0.1); }
+.tl-purple .tl-dot { border-color: var(--accent4); color: var(--accent4); background: rgba(201,126,247,0.1); }
+.tl-yellow .tl-dot { border-color: var(--warn); color: var(--warn); background: rgba(247,201,79,0.1); }
+.tl-gray .tl-dot { border-color: var(--muted); color: var(--muted); background: rgba(122,127,149,0.1); }
+/* ── Comparison table ── */
+.cmp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cmp-table th { padding: 10px 14px; text-align: left; font-size: 12px; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); background: var(--code-bg); }
+.cmp-table td { padding: 11px 14px; border-bottom: 1px solid rgba(42,45,56,0.5); line-height: 1.5; }
+.cmp-table tr:last-child td { border-bottom: none; }
+.cmp-table tr:hover td { background: rgba(255,255,255,0.02); }
+td.col-key { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent2); font-weight: 500; white-space: nowrap; }
+/* ── Compaction bars ── */
+.compact-row { display: flex; flex-direction: column; gap: 10px; }
+.compact-item { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; }
+.compact-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  width: 80px;
+  text-align: center;
+}
+.compact-info { flex: 1; }
+.compact-name { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+.compact-desc { font-size: 12px; color: var(--muted); }
+.cost-bar { width: 100px; height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; flex-shrink: 0; }
+.cost-fill { height: 100%; border-radius: 3px; }
+/* ── Tools grid ── */
+.tools-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.tool-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  transition: border-color 0.2s;
+}
+.tool-card:hover { border-color: var(--accent); }
+.tool-name { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+.tool-desc { font-size: 11px; color: var(--muted); }
+.tool-safe { display: inline-block; font-size: 10px; padding: 2px 6px; border-radius: 3px; margin-top: 5px; }
+.safe-ro { background: rgba(56,217,169,0.12); color: var(--accent2); }
+.safe-rw { background: rgba(247,123,79,0.12); color: var(--accent3); }
+.safe-shell { background: rgba(247,201,79,0.12); color: var(--warn); }
+/* ── Security layers ── */
+.sec-layers { display: flex; gap: 8px; align-items: stretch; }
+.sec-layer {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 10px;
+  text-align: center;
+  position: relative;
+}
+.sec-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px; font-weight: 700;
+  margin-bottom: 6px;
+}
+.sec-name { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+.sec-detail { font-size: 11px; color: var(--muted); line-height: 1.5; }
+/* ── Footer nav ── */
+.footer-nav {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: rgba(10,12,16,0.92);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border);
+  padding: 10px 24px;
+  display: flex; justify-content: center; align-items: center; gap: 6px;
+  z-index: 100;
+}
+.nav-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--border);
+  cursor: pointer;
+  border: none;
+  transition: background 0.2s, transform 0.2s;
+}
+.nav-dot.active { background: var(--accent); transform: scale(1.4); }
+.nav-dot:hover { background: var(--muted); }
+.section-label { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; margin: 0 8px; }
+/* ── Misc ── */
+h3 { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--text); }
+.tag { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 2px 7px; border-radius: 4px; margin-left: 8px; vertical-align: middle; }
+.tag-blue { background: rgba(79,142,247,0.15); color: var(--accent); }
+.tag-green { background: rgba(56,217,169,0.15); color: var(--accent2); }
+.divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+.mono { font-family: 'JetBrains Mono', monospace; }
+/* ── Subagent diagram ── */
+.agent-tree { display: flex; flex-direction: column; align-items: center; gap: 0; }
+.agent-box {
+  border-radius: 10px;
+  padding: 12px 24px;
+  border: 1px solid;
+  text-align: center;
+  min-width: 200px;
+}
+.agent-box .ab-title { font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.agent-box .ab-sub { font-size: 11px; color: var(--muted); }
+.agent-line { width: 1px; height: 24px; background: var(--border); }
+.agent-fork { display: flex; gap: 40px; }
+.agent-fork-col { display: flex; flex-direction: column; align-items: center; gap: 0; }
+
+@media (max-width: 640px) {
+  .stat-row { grid-template-columns: repeat(2,1fr); }
+  .two-col { grid-template-columns: 1fr; }
+  .tools-grid { grid-template-columns: repeat(2,1fr); }
+  .sec-layers { flex-wrap: wrap; }
+}
+</style>
+</head>
+<body>
+
+<div class="deck">
+
+<!-- ═══ SLIDE 0: Hero ═══ -->
+<div class="slide" id="s0">
+  <div class="hero">
+    <div class="hero-tag">Architecture Deep Dive · 2026</div>
+    <h1>Claude Code<br><span>源码解析与架构设计</span></h1>
+    <div class="hero-sub">
+      基于 v2.1.88 源码分析 · 512K 行 TypeScript · 4600+ 文件<br>
+      从一次 npm source map 泄露，窥见 Anthropic 生产级 AI Agent 的完整设计
+    </div>
+    <div class="hero-pills">
+      <span class="pill pill-blue">Agentic Loop（智能体主循环）</span>
+      <span class="pill pill-green">Context Compaction（上下文压缩）</span>
+      <span class="pill pill-orange">Permission System（权限系统）</span>
+      <span class="pill pill-purple">Multi-Agent（多智能体）</span>
+      <span class="pill pill-yellow">MCP Protocol（模型上下文协议）</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 1: 背景事件 ═══ -->
+<div class="slide" id="s1">
+  <div class="slide-header">
+    <span class="slide-num">01</span>
+    <span class="slide-title">这一切是怎么开始的？</span>
+  </div>
+  <div class="slide-body">
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-num" style="color:var(--accent)">512K</div>
+        <div class="stat-label">行 TypeScript 源码</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" style="color:var(--accent2)">4,600+</div>
+        <div class="stat-label">源文件数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" style="color:var(--accent3)">279</div>
+        <div class="stat-label">官方"开源"文件数</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" style="color:var(--accent4)">50+</div>
+        <div class="stat-label">内置工具</div>
+      </div>
+    </div>
+
+    <div class="callout callout-orange">
+      <strong>2026年3月31日</strong>：安全研究员 Chaofan Shou 发现 npm 包中遗留了 <code>.map</code> source map 调试文件。
+      这些文件映射了完整 TypeScript 源码——不是 hack，只是构建流程一个配置疏忽。
+      Reddit r/LocalLLaMA 社区在几小时内完成了全量解析。
+    </div>
+
+    <hr class="divider">
+    <h3>官方"开源"与实际源码的差距</h3>
+    <table class="cmp-table">
+      <thead><tr>
+        <th>模块</th><th>官方 GitHub (279文件)</th><th>泄露源码 (4600+文件)</th>
+      </tr></thead>
+      <tbody>
+        <tr><td class="col-key">核心引擎</td><td>❌ 未包含</td><td>✅ 完整</td></tr>
+        <tr><td class="col-key">Agentic Loop（智能体主循环）</td><td>❌ 未包含</td><td>✅ query.ts 1729行</td></tr>
+        <tr><td class="col-key">权限系统</td><td>❌ 未包含</td><td>✅ permissions.ts 52K</td></tr>
+        <tr><td class="col-key">MCP 客户端</td><td>❌ 未包含</td><td>✅ client.ts 119K</td></tr>
+        <tr><td class="col-key">工具实现</td><td>❌ 未包含</td><td>✅ Bash/Read/Write/Edit…</td></tr>
+        <tr><td class="col-key">协议许可</td><td>Anthropic 商业 ToS</td><td>专有商业代码</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 2: 技术栈 ═══ -->
+<div class="slide" id="s2">
+  <div class="slide-header">
+    <span class="slide-num">02</span>
+    <span class="slide-title">技术栈选型 & 设计决策</span>
+  </div>
+  <div class="slide-body">
+    <table class="cmp-table">
+      <thead><tr><th>层次</th><th>技术选型</th><th>为什么这样选？</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="col-key">运行时</td>
+          <td><strong>Bun</strong></td>
+          <td>比 Node.js 启动更快，原生 TypeScript 支持，<code>feature()</code> API 实现构建时 dead code 消除</td>
+        </tr>
+        <tr>
+          <td class="col-key">语言</td>
+          <td><strong>TypeScript strict</strong></td>
+          <td>4600+ 文件规模下，类型安全不是选项而是必须</td>
+        </tr>
+        <tr>
+          <td class="col-key">Terminal UI</td>
+          <td><strong>React 18 + Ink</strong></td>
+          <td>权限对话框、进度条、多面板布局——终端 UI 足够复杂，React 组件模型合理</td>
+        </tr>
+        <tr>
+          <td class="col-key">API 客户端</td>
+          <td><strong>@anthropic-ai/sdk</strong></td>
+          <td>官方 SDK，支持流式输出</td>
+        </tr>
+        <tr>
+          <td class="col-key">工具扩展</td>
+          <td><strong>MCP SDK</strong></td>
+          <td>标准化 LLM 与外部工具通信协议</td>
+        </tr>
+        <tr>
+          <td class="col-key">Feature Flag（功能开关）</td>
+          <td><strong>GrowthBook</strong></td>
+          <td>服务端 A/B 测试 + 安全 kill switch，未发布功能门控</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout callout-blue" style="margin-top:20px">
+      <strong>Java 类比：</strong>Bun ≈ GraalVM Native Image（快启动）；React/Ink ≈ JavaFX 但跑在终端；GrowthBook ≈ LaunchDarkly；TypeScript strict ≈ Java + Lombok + Bean Validation 一起用
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 3: 五层架构 ═══ -->
+<div class="slide" id="s3">
+  <div class="slide-header">
+    <span class="slide-num">03</span>
+    <span class="slide-title">五层架构总览</span>
+  </div>
+  <div class="slide-body">
+    <div class="layer-stack">
+      <div class="layer layer-purple">
+        <div class="layer-icon">SURFACE</div>
+        <div>
+          <div class="layer-name" style="color:var(--accent4)">表现层 — 入口与渲染</div>
+          <div class="layer-desc">cli.tsx · mcp.ts · SDK server · daemon/bridge/ssh · React 18 + Ink TUI · App.tsx + REPL.tsx</div>
+        </div>
+      </div>
+      <div class="layer-arrow">↓</div>
+      <div class="layer layer-green">
+        <div class="layer-icon">CORE</div>
+        <div>
+          <div class="layer-name" style="color:var(--accent2)">核心层 — Agent Loop 主循环</div>
+          <div class="layer-desc">query.ts (1729行 while-true) · Async Generator（异步生成器） · 流式 API 调用 · Compaction Pipeline</div>
+        </div>
+      </div>
+      <div class="layer-arrow">↓</div>
+      <div class="layer layer-orange">
+        <div class="layer-icon">SAFETY</div>
+        <div>
+          <div class="layer-name" style="color:var(--accent3)">安全/动作层 — 权限与工具</div>
+          <div class="layer-desc">Permission System（权限系统） · PreToolUse Hook · Rule Evaluator · Shell Sandbox · SubAgent 隔离</div>
+        </div>
+      </div>
+      <div class="layer-arrow">↓</div>
+      <div class="layer layer-blue">
+        <div class="layer-icon">STATE</div>
+        <div>
+          <div class="layer-name" style="color:var(--accent)">状态层 — 上下文与记忆</div>
+          <div class="layer-desc">Context Assembly · CLAUDE.md Hierarchy · Session Persistence (JSONL) · Sidechain Transcripts · Auto Memory</div>
+        </div>
+      </div>
+      <div class="layer-arrow">↓</div>
+      <div class="layer layer-gray">
+        <div class="layer-icon">BACKEND</div>
+        <div>
+          <div class="layer-name" style="color:var(--muted)">后端层 — 执行引擎与外部资源</div>
+          <div class="layer-desc">Claude API · MCP Servers · Bash/Shell · File System · Web Fetch · External Services</div>
+        </div>
+      </div>
+    </div>
+    <div class="callout callout-blue">
+      <strong>核心思想：</strong>确定性基础设施（上下文管理、工具路由、恢复机制）+ 模型判断（LLM 推理）的分离。架构不投资显式规划器或状态图，而是让 LLM 在一个稳定的 harness 内自主决策。
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 4: Agent Loop ═══ -->
+<div class="slide" id="s4">
+  <div class="slide-header">
+    <span class="slide-num">04</span>
+    <span class="slide-title">核心：Agentic Loop（智能体主循环） 主循环</span>
+  </div>
+  <div class="slide-body">
+    <div class="two-col">
+      <div>
+        <h3>query.ts 函数签名</h3>
+        <pre><span class="cm">// 1729行的心脏 —— Async Generator（异步生成器）</span>
+<span class="kw">export async function</span>* <span class="fn">query</span>(
+  params: <span class="ty">QueryParams</span>,
+): <span class="ty">AsyncGenerator</span>&lt;
+  | <span class="ty">StreamEvent</span>
+  | <span class="ty">RequestStartEvent</span>
+  | <span class="ty">Message</span>
+  | <span class="ty">TombstoneMessage</span>
+  | <span class="ty">ToolUseSummaryMessage</span>,
+  <span class="ty">Terminal</span>  <span class="cm">// return: 终止原因</span>
+&gt;</pre>
+        <div class="callout callout-green" style="font-size:12px">
+          <strong>为什么 Async Generator（异步生成器）？</strong> 把流式事件、正常终止、错误传播统一在单一函数里。Java 类比：<code>Flux&lt;T&gt;</code>（Reactor），但用语言原生语法，无需框架。
+        </div>
+      </div>
+      <div>
+        <h3>不可变参数 vs 可变状态</h3>
+        <pre><span class="cm">// 不可变参数 (整个循环不变)</span>
+<span class="kw">type</span> <span class="ty">QueryParams</span> = {
+  messages: <span class="ty">Message</span>[]
+  systemPrompt: <span class="ty">SystemPrompt</span>
+  canUseTool: <span class="ty">CanUseToolFn</span>
+  maxTurns?: <span class="ty">number</span>
+}
+
+<span class="cm">// 可变状态 (每次迭代更新)</span>
+<span class="kw">type</span> <span class="ty">State</span> = {
+  messages: <span class="ty">Message</span>[]
+  turnCount: <span class="ty">number</span>
+  transition: <span class="ty">Continue</span> | <span class="kw">undefined</span>
+  <span class="cm">// ...</span>
+}
+
+<span class="cm">// Continue Site 模式 — 原子替换</span>
+state = { ...state,
+  messages: newMessages,
+  turnCount: nextTurnCount,
+  transition: { reason: <span class="str">'next_turn'</span> }
+}</pre>
+      </div>
+    </div>
+    <hr class="divider">
+    <h3>每个 Turn 的 6 阶段流水线</h3>
+    <div class="timeline">
+      <div class="tl-item tl-blue">
+        <div class="tl-dot">1</div>
+        <div class="tl-body">
+          <div class="tl-step">Pre-Request Compaction <span class="tag tag-green">cheapest-first</span></div>
+          <div class="tl-detail">按成本从低到高依次尝试 5 级压缩策略（详见 Slide 06）</div>
+        </div>
+      </div>
+      <div class="tl-item tl-green">
+        <div class="tl-dot">2</div>
+        <div class="tl-body">
+          <div class="tl-step">API Call & Streaming（流式处理）</div>
+          <div class="tl-detail">Streaming（流式处理）ToolExecutor：Claude 生成响应的同时并行执行只读工具，isConcurrencySafe 标志控制安全边界</div>
+        </div>
+      </div>
+      <div class="tl-item tl-orange">
+        <div class="tl-dot">3</div>
+        <div class="tl-body">
+          <div class="tl-step">Tool Authorization Pipeline（工具授权流水线）</div>
+          <div class="tl-detail">PreFilter → PreToolUse Hook → Rule Evaluation → Permission Handler，每个工具独立鉴权</div>
+        </div>
+      </div>
+      <div class="tl-item tl-purple">
+        <div class="tl-dot">4</div>
+        <div class="tl-body">
+          <div class="tl-step">Tool Execution & Result Streaming（流式处理）</div>
+          <div class="tl-detail">并发安全工具并行执行，写操作串行，结果流式回传</div>
+        </div>
+      </div>
+      <div class="tl-item tl-yellow">
+        <div class="tl-dot">5</div>
+        <div class="tl-body">
+          <div class="tl-step">Recovery Mechanisms</div>
+          <div class="tl-detail">token 超限自动重试，fallback model 切换，成本感知错误恢复</div>
+        </div>
+      </div>
+      <div class="tl-item tl-gray">
+        <div class="tl-dot">6</div>
+        <div class="tl-body">
+          <div class="tl-step">Stop Condition Check</div>
+          <div class="tl-detail">maxTurns、用户中断、模型返回 end_turn、安全拒绝……任一满足则终止循环</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 5: 工具系统 ═══ -->
+<div class="slide" id="s5">
+  <div class="slide-header">
+    <span class="slide-num">05</span>
+    <span class="slide-title">工具系统：50+ 工具的设计哲学</span>
+  </div>
+  <div class="slide-body">
+    <div class="callout callout-orange">
+      <strong>核心原则：</strong>每个工具自带 input schema、permission level、execution logic，没有工具间共享的可变状态。BashTool 和 FileReadTool 在同一注册表中，但风险画像完全不同，架构分别对待。
+    </div>
+    <hr class="divider">
+    <h3>工具分类 & 并发安全级别</h3>
+    <div class="tools-grid">
+      <div class="tool-card">
+        <div class="tool-name">FileReadTool</div>
+        <div class="tool-desc">读取文件内容，支持分页</div>
+        <span class="tool-safe safe-ro">✓ concurrency-safe</span>
+      </div>
+      <div class="tool-card">
+        <div class="tool-name">GlobTool</div>
+        <div class="tool-desc">文件系统模式匹配</div>
+        <span class="tool-safe safe-ro">✓ concurrency-safe</span>
+      </div>
+      <div class="tool-card">
+        <div class="tool-name">GrepTool</div>
+        <div class="tool-desc">基于 ripgrep 的内容搜索</div>
+        <span class="tool-safe safe-ro">✓ concurrency-safe</span>
+      </div>
+      <div class="tool-card">
+        <div class="tool-name">FileEditTool</div>
+        <div class="tool-desc">精确字符串替换编辑</div>
+        <span class="tool-safe safe-rw">✗ exclusive</span>
+      </div>
+      <div class="tool-card">
+        <div class="tool-name">FileWriteTool</div>
+        <div class="tool-desc">新建或覆写文件</div>
+        <span class="tool-safe safe-rw">✗ exclusive</span>
+      </div>
+      <div class="tool-card">
+        <div class="tool-name">BashTool</div>
+        <div class="tool-desc">执行 Shell 命令</div>
+        <span class="tool-safe safe-shell">⚠ gated + sandboxed</span>
+      </div>
+      <div class="tool-card">
+        <div class="tool-name">AgentTool</div>
+        <div class="tool-desc">派生子 Agent 委托任务</div>
+        <span class="tool-safe safe-shell">⚠ isolated context</span>
+      </div>
+      <div class="tool-card">
+        <div class="tool-name">WebFetchTool</div>
+        <div class="tool-desc">抓取 URL 内容</div>
+        <span class="tool-safe safe-ro">✓ concurrency-safe</span>
+      </div>
+      <div class="tool-card">
+        <div class="tool-name">MCPTool (dynamic)</div>
+        <div class="tool-desc">MCP Server 动态注册工具</div>
+        <span class="tool-safe safe-shell">⚠ per-server perms</span>
+      </div>
+    </div>
+    <hr class="divider">
+    <h3>并发安全控制核心逻辑</h3>
+    <pre><span class="cm">// Streaming（流式处理）ToolExecutor.ts</span>
+<span class="kw">private</span> <span class="fn">canExecuteTool</span>(isConcurrencySafe: <span class="ty">boolean</span>): <span class="ty">boolean</span> {
+  <span class="kw">const</span> executing = <span class="kw">this</span>.tools.filter(t => t.status === <span class="str">'executing'</span>)
+  <span class="kw">return</span> (
+    executing.length === <span class="num">0</span> ||
+    (isConcurrencySafe && executing.every(t => t.isConcurrencySafe))
+  )
+}</pre>
+    <div class="callout callout-blue">
+      <strong>Java 类比：</strong>ReadWriteLock — 多读一写。只读工具拿 readLock 并发执行，写操作拿 writeLock 独占。但这里的"锁"是运行时调度逻辑，不是 JVM 锁。
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 6: Context Compaction（上下文压缩） ═══ -->
+<div class="slide" id="s6">
+  <div class="slide-header">
+    <span class="slide-num">06</span>
+    <span class="slide-title">Context 压缩管线：LLM 应用的核心挑战</span>
+  </div>
+  <div class="slide-body">
+    <div class="callout callout-orange">
+      <strong>问题本质：</strong>LLM 的 Context Window（上下文窗口） 是有限资源，长对话/大型任务会溢出。所有优化都围绕这个瓶颈展开。对话历史丢失后，客户端还需自行计算剩余 budget 并报给服务端——典型的分布式状态同步难题。
+    </div>
+    <hr class="divider">
+    <h3>5 级压缩策略（cheapest-first 执行顺序）</h3>
+    <div class="compact-row">
+      <div class="compact-item">
+        <div class="compact-badge" style="background:rgba(56,217,169,0.12);color:var(--accent2)">Layer 1</div>
+        <div class="compact-info">
+          <div class="compact-name">Tool Result Budget（工具结果预算）</div>
+          <div class="compact-desc">截断过大的工具结果（如文件读取返回数千行），保留关键内容</div>
+        </div>
+        <div class="cost-bar"><div class="cost-fill" style="width:10%;background:var(--accent2)"></div></div>
+      </div>
+      <div class="compact-item">
+        <div class="compact-badge" style="background:rgba(79,142,247,0.12);color:var(--accent)">Layer 2</div>
+        <div class="compact-info">
+          <div class="compact-name">Snip Compact <span class="tag tag-blue">HISTORY_SNIP flag</span></div>
+          <div class="compact-desc">直接丢弃最旧的消息块——最激进但成本最低</div>
+        </div>
+        <div class="cost-bar"><div class="cost-fill" style="width:20%;background:var(--accent)"></div></div>
+      </div>
+      <div class="compact-item">
+        <div class="compact-badge" style="background:rgba(247,201,79,0.12);color:var(--warn)">Layer 3</div>
+        <div class="compact-info">
+          <div class="compact-name">Microcompact</div>
+          <div class="compact-desc">有 Prompt Cache（提示缓存） 感知地选择性清除单个工具结果，避免破坏缓存边界</div>
+        </div>
+        <div class="cost-bar"><div class="cost-fill" style="width:35%;background:var(--warn)"></div></div>
+      </div>
+      <div class="compact-item">
+        <div class="compact-badge" style="background:rgba(201,126,247,0.12);color:var(--accent4)">Layer 4</div>
+        <div class="compact-info">
+          <div class="compact-name">Context Collapse（上下文折叠） <span class="tag tag-blue">CONTEXT_COLLAPSE flag</span></div>
+          <div class="compact-desc">分阶段折叠消息块，生成压缩视图但不修改原始数据</div>
+        </div>
+        <div class="cost-bar"><div class="cost-fill" style="width:60%;background:var(--accent4)"></div></div>
+      </div>
+      <div class="compact-item">
+        <div class="compact-badge" style="background:rgba(247,123,79,0.12);color:var(--accent3)">Layer 5</div>
+        <div class="compact-info">
+          <div class="compact-name">Auto-Compact（自动摘要压缩）（LLM 摘要）</div>
+          <div class="compact-desc">阈值触发，调用 LLM 对整段对话做摘要——最贵但最有效，Collapse 通过后跳过</div>
+        </div>
+        <div class="cost-bar"><div class="cost-fill" style="width:100%;background:var(--accent3)"></div></div>
+      </div>
+    </div>
+    <div class="callout callout-green" style="margin-top:16px">
+      <strong>关键设计：</strong>Context Collapse（上下文折叠） 必须在 Auto-Compact（自动摘要压缩） 之前执行——若 Collapse 已降至阈值以下，Auto-Compact（自动摘要压缩）（一次 API 调用费用）就不触发，保留细粒度上下文同时省钱。<br><br>
+      <strong>Java GC 类比：</strong>Minor GC (L1-L2) → CMS (L3-L4) → Full GC (L5)，优先走成本最低的路径。
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 7: 权限系统 ═══ -->
+<div class="slide" id="s7">
+  <div class="slide-header">
+    <span class="slide-num">07</span>
+    <span class="slide-title">权限系统：Defense in Depth（纵深防御）</span>
+  </div>
+  <div class="slide-body">
+    <h3>工具调用授权管线（4级）</h3>
+    <div class="timeline" style="margin-bottom:20px">
+      <div class="tl-item tl-blue">
+        <div class="tl-dot">1</div>
+        <div class="tl-body">
+          <div class="tl-step">Pre-filtering</div>
+          <div class="tl-detail">按工具名和基础规则快速过滤，不允许的工具根本不进入后续流程</div>
+        </div>
+      </div>
+      <div class="tl-item tl-green">
+        <div class="tl-dot">2</div>
+        <div class="tl-body">
+          <div class="tl-step">PreToolUse Hook</div>
+          <div class="tl-detail">用户自定义脚本拦截点，可修改参数、记录日志、拒绝执行</div>
+        </div>
+      </div>
+      <div class="tl-item tl-orange">
+        <div class="tl-dot">3</div>
+        <div class="tl-body">
+          <div class="tl-step">Rule Evaluation</div>
+          <div class="tl-detail">匹配 allowList/denyList 规则、路径边界检查、模式匹配</div>
+        </div>
+      </div>
+      <div class="tl-item tl-purple">
+        <div class="tl-dot">4</div>
+        <div class="tl-body">
+          <div class="tl-step">Permission Handler（人工确认）</div>
+          <div class="tl-detail">不确定操作弹出 Terminal 对话框请求人工授权，auto-mode 用 ML 分类器决定是否可自动通过</div>
+        </div>
+      </div>
+    </div>
+    <hr class="divider">
+    <h3>3 种工作模式</h3>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+      <div class="tool-card">
+        <div class="tool-name" style="color:var(--accent2)">Default Mode（默认模式）</div>
+        <div class="tool-desc">每次不确定操作都询问用户，最高控制权，适合敏感操作</div>
+      </div>
+      <div class="tool-card">
+        <div class="tool-name" style="color:var(--warn)">Auto Mode（自动模式）</div>
+        <div class="tool-desc">ML 分类器评估风险，低风险自动执行，高风险仍需确认</div>
+      </div>
+      <div class="tool-card">
+        <div class="tool-name" style="color:var(--accent3)">Headless / CI Mode（无人值守/持续集成模式）</div>
+        <div class="tool-desc">无人值守，依赖预设规则集，适合 CI/CD 流水线</div>
+      </div>
+    </div>
+    <div class="callout callout-blue" style="margin-top:16px">
+      <strong>Java 类比：</strong>Spring Security 的 <code>SecurityFilterChain</code> + 自定义 <code>AccessDecisionVoter</code>，但鉴权对象是"AI 将要执行的动作"而非"HTTP 请求"。Anthropic 的核心信念：<em>Agent 的自主性正是其价值所在，但人类应始终保留对目标追求方式的控制权。</em>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 8: Multi-Agent（多智能体） ═══ -->
+<div class="slide" id="s8">
+  <div class="slide-header">
+    <span class="slide-num">08</span>
+    <span class="slide-title">多 Agent 架构：隔离与委托</span>
+  </div>
+  <div class="slide-body">
+    <div class="two-col">
+      <div>
+        <h3>子 Agent 隔离模型</h3>
+        <ul class="point-list">
+          <li>独立 file cache（从父 Agent 克隆）</li>
+          <li>独立 AbortController（异步）或共享（同步）</li>
+          <li>独立 transcript 记录（JSONL sidechain）</li>
+          <li>过滤后的工具池（按 Agent 定义限制）</li>
+          <li>以纯文本形式向父 Agent 返回结果</li>
+          <li>权限不继承——resume 时不恢复子 Agent 权限</li>
+        </ul>
+        <div class="callout callout-orange" style="margin-top:14px;font-size:12px">
+          <strong>Java 类比：</strong>Fork/Join 框架，但 worker 是独立的 LLM 实例，通信通道是自然语言而非方法调用返回值。
+        </div>
+      </div>
+      <div>
+        <h3>委托树结构</h3>
+        <div class="agent-tree">
+          <div class="agent-box" style="background:rgba(79,142,247,0.08);border-color:rgba(79,142,247,0.4)">
+            <div class="ab-title" style="color:var(--accent)">Orchestrator Agent（编排主智能体）</div>
+            <div class="ab-sub">主 Agent · 持有完整 context</div>
+          </div>
+          <div class="agent-line"></div>
+          <div class="agent-fork">
+            <div class="agent-fork-col">
+              <div class="agent-line"></div>
+              <div class="agent-box" style="background:rgba(56,217,169,0.08);border-color:rgba(56,217,169,0.35)">
+                <div class="ab-title" style="color:var(--accent2)">Sub-Agent（子智能体） A</div>
+                <div class="ab-sub">读取文件<br>独立 context</div>
+              </div>
+            </div>
+            <div class="agent-fork-col">
+              <div class="agent-line"></div>
+              <div class="agent-box" style="background:rgba(247,123,79,0.08);border-color:rgba(247,123,79,0.35)">
+                <div class="ab-title" style="color:var(--accent3)">Sub-Agent（子智能体） B</div>
+                <div class="ab-sub">运行测试<br>独立 context</div>
+              </div>
+            </div>
+            <div class="agent-fork-col">
+              <div class="agent-line"></div>
+              <div class="agent-box" style="background:rgba(201,126,247,0.08);border-color:rgba(201,126,247,0.35)">
+                <div class="ab-title" style="color:var(--accent4)">Sub-Agent（子智能体） C</div>
+                <div class="ab-sub">搜索文档<br>独立 context</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="callout callout-green" style="margin-top:14px;font-size:12px">
+          未发布的 <strong>Coordinator Mode（协调器模式）</strong> (feature flag) 支持多 worker 并行，类似 MapReduce 的 Map 阶段。
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 9: MCP & 扩展 ═══ -->
+<div class="slide" id="s9">
+  <div class="slide-header">
+    <span class="slide-num">09</span>
+    <span class="slide-title">扩展架构：MCP + 四种机制</span>
+  </div>
+  <div class="slide-body">
+    <table class="cmp-table">
+      <thead><tr><th>扩展机制</th><th>类比（Java/Spring）</th><th>作用层次</th><th>典型用途</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="col-key">MCP Server</td>
+          <td>SPI + gRPC/JSON-RPC</td>
+          <td>进程级隔离</td>
+          <td>数据库查询、Git 操作、自定义工具注册</td>
+        </tr>
+        <tr>
+          <td class="col-key">Hooks（钩子机制）</td>
+          <td>AOP 切面 / Filter</td>
+          <td>工具生命周期</td>
+          <td>审计日志、参数验证、安全扫描</td>
+        </tr>
+        <tr>
+          <td class="col-key">Skills（技能包）</td>
+          <td>@Configuration 模块</td>
+          <td>指令/知识</td>
+          <td>项目规范注入、领域知识复用</td>
+        </tr>
+        <tr>
+          <td class="col-key">Plugins（插件）</td>
+          <td>Maven Plugin</td>
+          <td>能力包</td>
+          <td>集成第三方服务（Jira、Slack 等）</td>
+        </tr>
+      </tbody>
+    </table>
+    <hr class="divider">
+    <h3>MCP 协议：标准化工具通信</h3>
+    <pre><span class="cm">// MCP Server 工具注册示意</span>
+{
+  <span class="str">"type"</span>: <span class="str">"web_search_20250305"</span>,
+  <span class="str">"name"</span>: <span class="str">"web_search"</span>,
+  <span class="str">"description"</span>: <span class="str">"Search the web for current info"</span>,
+  <span class="str">"input_schema"</span>: {
+    <span class="str">"type"</span>: <span class="str">"object"</span>,
+    <span class="str">"properties"</span>: {
+      <span class="str">"query"</span>: { <span class="str">"type"</span>: <span class="str">"string"</span> }
+    }
+  }
+}
+
+<span class="cm">// 运行时：JSON-RPC over stdio 或 HTTP SSE</span>
+<span class="cm">// Claude Code 作为 MCP Client，每个 Server 独立进程</span></pre>
+    <div class="callout callout-blue">
+      <strong>为什么设计 4 种机制而不是 1 种？</strong>它们解决不同层面的扩展需求：MCP 扩展能力边界，Hooks（钩子机制） 扩展控制边界，Skills（技能包） 扩展知识边界，Plugins（插件） 扩展集成边界。强行统一会导致每种场景都被迫用不合适的抽象。
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 10: 5大价值观 ═══ -->
+<div class="slide" id="s10">
+  <div class="slide-header">
+    <span class="slide-num">10</span>
+    <span class="slide-title">设计哲学：5 个核心价值观 → 13 条设计原则</span>
+  </div>
+  <div class="slide-body">
+    <div class="stat-row" style="grid-template-columns:repeat(5,1fr)">
+      <div class="stat-card" style="border-color:rgba(79,142,247,0.3)">
+        <div style="font-size:20px;margin-bottom:6px">⚖️</div>
+        <div class="stat-label" style="font-size:11px;line-height:1.5">人类决策<br>权威</div>
+      </div>
+      <div class="stat-card" style="border-color:rgba(247,123,79,0.3)">
+        <div style="font-size:20px;margin-bottom:6px">🛡️</div>
+        <div class="stat-label" style="font-size:11px;line-height:1.5">安全性<br>与隐私</div>
+      </div>
+      <div class="stat-card" style="border-color:rgba(56,217,169,0.3)">
+        <div style="font-size:20px;margin-bottom:6px">⚙️</div>
+        <div class="stat-label" style="font-size:11px;line-height:1.5">可靠<br>执行</div>
+      </div>
+      <div class="stat-card" style="border-color:rgba(201,126,247,0.3)">
+        <div style="font-size:20px;margin-bottom:6px">🚀</div>
+        <div class="stat-label" style="font-size:11px;line-height:1.5">能力<br>放大</div>
+      </div>
+      <div class="stat-card" style="border-color:rgba(247,201,79,0.3)">
+        <div style="font-size:20px;margin-bottom:6px">🔄</div>
+        <div class="stat-label" style="font-size:11px;line-height:1.5">上下文<br>适应性</div>
+      </div>
+    </div>
+    <hr class="divider">
+    <h3>三个贯穿全局的架构选择</h3>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="callout callout-blue">
+        <strong>1. 分级分层（Graduated Layering）：</strong>每个关切（安全、权限、压缩、扩展）都有独立的分级机制，而非单一的单体实现。失败模式被隔离，不同级别可独立演进。
+      </div>
+      <div class="callout callout-green">
+        <strong>2. Append-Only（仅追加） 设计偏好可审计性：</strong>Session transcript 是 JSONL append-only 日志，支持 fork、resume、审计——查询能力换可观测性。类比 Event Sourcing。
+      </div>
+      <div class="callout callout-orange">
+        <strong>3. 确定性 Harness（控制围栏） 内使用模型判断：</strong>架构不构建显式规划器，而是投资稳定的基础设施（context 管理、工具路由、错误恢复），让 LLM 在确定性 harness 内自主决策。
+      </div>
+    </div>
+    <hr class="divider">
+    <div class="callout callout-blue">
+      <strong>数据佐证：</strong>Anthropic 内部调研 132 名工程师，约 27% 的 Claude Code 辅助任务是"没有这个工具就不会尝试的工作"。架构实现的是质的工作流创新，而非仅仅加速现有流程。
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 11: 未来特性 ═══ -->
+<div class="slide" id="s11">
+  <div class="slide-header">
+    <span class="slide-num">11</span>
+    <span class="slide-title">从 Feature Flag（功能开关） 窥见未来路线图</span>
+  </div>
+  <div class="slide-body">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+      <div class="tool-card">
+        <div class="tool-name" style="color:var(--accent4)">Voice Mode（语音模式）</div>
+        <div class="tool-desc">语音输入输出支持，feature flag 已存在但未开放</div>
+        <span class="tool-safe safe-shell">⏳ 开发中</span>
+      </div>
+      <div class="tool-card">
+        <div class="tool-name" style="color:var(--accent3)">Coordinator Mode（协调器模式）</div>
+        <div class="tool-desc">多 Worker 并行协调，类 MapReduce。代号存在于源码</div>
+        <span class="tool-safe safe-shell">⏳ 开发中</span>
+      </div>
+      <div class="tool-card">
+        <div class="tool-name" style="color:var(--accent)">KAIROS Mode（主动感知模式）</div>
+        <div class="tool-desc">主动感知模式，Agent 主动提出任务而非等待指令</div>
+        <span class="tool-safe safe-shell">⏳ 开发中</span>
+      </div>
+    </div>
+    <hr class="divider">
+    <h3>6 个开放研究方向（学术论文总结）</h3>
+    <ul class="point-list">
+      <li><strong>静默失败与可观测性缺口</strong>——Agent 失败时往往无声，需要更好的追踪和评估框架</li>
+      <li><strong>记忆作为一等公民</strong>——跨 session 的长期记忆目前依赖 CLAUDE.md，需要更系统的解决方案</li>
+      <li><strong>Harness（控制围栏） 边界演化</strong>——在哪里、何时、做什么、与谁协作，边界如何随信任度动态调整</li>
+      <li><strong>架构解耦</strong>——推理、执行、会话三层进一步分离，允许独立扩展和替换</li>
+      <li><strong>治理与监督</strong>——随 Agent 自主性增强，如何在规模上维持人类监督</li>
+      <li><strong>主动架构</strong>——从响应式（等待输入）到主动式（主动感知、规划、行动）的转变</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 12: Java 开发者参考卡 ═══ -->
+<div class="slide" id="s12">
+  <div class="slide-header">
+    <span class="slide-num">12</span>
+    <span class="slide-title">Java 开发者参考卡：概念映射</span>
+  </div>
+  <div class="slide-body">
+    <table class="cmp-table">
+      <thead><tr><th>Claude Code 概念</th><th>Java / Spring 生态类比</th><th>本质差异</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="col-key">Async Generator（异步生成器） Loop</td>
+          <td>Project Reactor <code>Flux&lt;T&gt;</code></td>
+          <td>驱动源是 LLM 输出，而非数据流</td>
+        </tr>
+        <tr>
+          <td class="col-key">Context Compaction（上下文压缩）</td>
+          <td>分级 GC (Minor/Major/Full)</td>
+          <td>"内存"是 token，溢出代价是 API 费用</td>
+        </tr>
+        <tr>
+          <td class="col-key">Permission Pipeline</td>
+          <td>SecurityFilterChain + AccessDecisionVoter</td>
+          <td>鉴权对象是"AI 即将执行的动作"</td>
+        </tr>
+        <tr>
+          <td class="col-key">isConcurrencySafe</td>
+          <td>ReadWriteLock</td>
+          <td>调度逻辑在运行时，不是 JVM 锁</td>
+        </tr>
+        <tr>
+          <td class="col-key">MCP Server</td>
+          <td>SPI + JSON-RPC over gRPC</td>
+          <td>跨进程，通信通道是 stdio 或 HTTP SSE</td>
+        </tr>
+        <tr>
+          <td class="col-key">Hooks（钩子机制）</td>
+          <td>@Aspect + @Around</td>
+          <td>切入的是 LLM 工具调用生命周期</td>
+        </tr>
+        <tr>
+          <td class="col-key">CLAUDE.md / Skills（技能包）</td>
+          <td>@Configuration + application.yml</td>
+          <td>配置对象是 LLM 的行为约束，非 Bean</td>
+        </tr>
+        <tr>
+          <td class="col-key">Session Transcript (JSONL)</td>
+          <td>Event Sourcing / Kafka 日志</td>
+          <td>Append-Only（仅追加），支持 fork/resume/审计</td>
+        </tr>
+        <tr>
+          <td class="col-key">SubAgent</td>
+          <td>ForkJoinTask</td>
+          <td>Worker 是独立 LLM 实例，通信是自然语言</td>
+        </tr>
+        <tr>
+          <td class="col-key">Continue Site Pattern</td>
+          <td>React setState / Immutable 对象</td>
+          <td>状态原子替换，防止中间状态污染</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="callout callout-green" style="margin-top:16px">
+      <strong>核心认知迁移：</strong>传统后端开发，你控制完整的执行流程。Agentic 开发，你构建"围栏"（harness）——确定性的安全边界、工具定义、权限规则，然后让 LLM 在围栏内自主决策。这是思维模式上最大的转变。
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 13: 参考资源 ═══ -->
+<div class="slide" id="s13">
+  <div class="slide-header">
+    <span class="slide-num">13</span>
+    <span class="slide-title">参考资源 & 延伸阅读</span>
+  </div>
+  <div class="slide-body">
+    <div class="two-col">
+      <div>
+        <h3>学术 / 技术报告</h3>
+        <ul class="point-list">
+          <li><strong>arxiv 2604.14228</strong> — "Dive into Claude Code: The Design Space of Today's and Future AI Agent Systems"（最权威学术分析，含 5 价值观 13 原则框架）</li>
+          <li><strong>VILA-Lab GitHub</strong> — github.com/VILA-Lab/Dive-into-Claude-Code（配套代码与资源汇总）</li>
+          <li><strong>DeepWiki</strong> — deepwiki.com/luyao618/Claude-Code-Source-Study（25篇系列深度文章，中文）</li>
+        </ul>
+      </div>
+      <div>
+        <h3>工程博客 / 逆向分析</h3>
+        <ul class="point-list">
+          <li><strong>bits-bytes-nn.github.io</strong> — Claude Code 架构详解（含 agentic loop、compaction pipeline 源码分析）</li>
+          <li><strong>WaveSpeed Blog</strong> — 512K 行 TypeScript 完整架构拆解</li>
+          <li><strong>waiterxiaoyy/Deep-Dive-Claude-Code</strong> — 13章渐进式分析 + 12个可运行 demo</li>
+          <li><strong>Zain Hasan Blog</strong> — v2.1.88 架构深度解析含 ASCII 架构图</li>
+        </ul>
+      </div>
+    </div>
+    <hr class="divider">
+    <div class="callout callout-blue">
+      <strong>官方文档入口：</strong><br>
+      Claude Code 使用文档：docs.anthropic.com/en/docs/claude-code/overview<br>
+      Anthropic Agent 设计指南：docs.anthropic.com/en/docs/build-with-claude/agents<br>
+      MCP 协议规范：modelcontextprotocol.io
+    </div>
+    <div style="text-align:center;margin-top:28px;padding:20px;background:var(--surface2);border:1px solid var(--border);border-radius:10px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);margin-bottom:8px">PREPARED WITH</div>
+      <div style="font-size:16px;font-weight:700">Claude Code 源码解析 · Architecture Deep Dive</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">基于公开学术论文及社区逆向工程分析 · 2026</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══ EXTRA SLIDE: Glossary ═══ -->
+<div class="slide" id="s14">
+  <div class="slide-header">
+    <span class="slide-num">14</span>
+    <span class="slide-title">AI Agent 术语速查（中英对照）</span>
+  </div>
+  <div class="slide-body">
+    <table class="cmp-table">
+      <thead>
+        <tr><th>英文术语</th><th>中文解释</th><th>本质含义</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="col-key">Agentic Loop</td><td>智能体主循环</td><td>AI 持续“思考 → 调工具 → 获取结果 → 再思考”的核心循环</td></tr>
+        <tr><td class="col-key">Context Window</td><td>上下文窗口</td><td>模型一次能看到的最大历史内容</td></tr>
+        <tr><td class="col-key">Compaction</td><td>压缩</td><td>为了节省 Token 成本与窗口空间，对历史进行裁剪或摘要</td></tr>
+        <tr><td class="col-key">Harness</td><td>控制围栏</td><td>约束 AI 行为的确定性基础设施</td></tr>
+        <tr><td class="col-key">Hooks</td><td>钩子机制</td><td>在关键阶段插入自定义逻辑</td></tr>
+        <tr><td class="col-key">MCP</td><td>模型上下文协议</td><td>LLM 与工具/服务通信的标准协议</td></tr>
+        <tr><td class="col-key">Feature Flag</td><td>功能开关</td><td>控制功能是否开启的运行时配置</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</div><!-- /deck -->
+
+<!-- Footer nav dots -->
+<nav class="footer-nav" id="nav">
+  <script>
+    const slides = 15;
+    for (let i = 0; i < slides; i++) {
+      document.write(`<button class="nav-dot${i===0?' active':''}" onclick="scrollToSlide(${i})" title="Slide ${i}"></button>`);
+    }
+  </script>
+</nav>
+
+<script>
+const ids = ['s0','s1','s2','s3','s4','s5','s6','s7','s8','s9','s10','s11','s12','s13'];
+function scrollToSlide(i) {
+  const el = document.getElementById(ids[i]);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      const idx = ids.indexOf(e.target.id);
+      document.querySelectorAll('.nav-dot').forEach((d,i) => d.classList.toggle('active', i===idx));
+    }
+  });
+}, { threshold: 0.4 });
+ids.forEach(id => { const el = document.getElementById(id); if(el) observer.observe(el); });
+</script>
+</body>
+</html>

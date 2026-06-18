@@ -1,0 +1,1313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code 架构深度分享</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,700;1,400&family=Syne:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.6.1/reveal.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.6.1/theme/black.min.css">
+<style>
+/* ══════════════════════════════════════════════
+   DESIGN SYSTEM — "Terminal Blueprint" aesthetic
+   Dark engineering precision + neon accent grid
+   ══════════════════════════════════════════════ */
+:root {
+  --bg:       #070b12;
+  --surface:  #0d1220;
+  --surface2: #131926;
+  --border:   #1e2a3a;
+  --border2:  #263346;
+  --text:     #d8e4f0;
+  --muted:    #5a7090;
+  --accent:   #00d4ff;   /* cyan */
+  --green:    #00ff9d;   /* matrix green */
+  --orange:   #ff7b3d;   /* warm orange */
+  --purple:   #b06cff;   /* electric purple */
+  --yellow:   #ffd166;   /* amber */
+  --red:      #ff4d6a;
+  --mono:     'JetBrains Mono', monospace;
+  --display:  'Syne', sans-serif;
+  --body:     'Noto Sans SC', sans-serif;
+}
+
+.reveal-viewport { background: var(--bg); }
+.reveal { font-family: var(--body); color: var(--text); font-size: 16px; }
+.reveal .slides { text-align: left; }
+.reveal h1, .reveal h2, .reveal h3, .reveal h4 { font-family: var(--display); text-transform: none; letter-spacing: -0.02em; }
+.reveal h1 { font-size: 2.8em; font-weight: 800; }
+.reveal h2 { font-size: 1.8em; font-weight: 700; }
+.reveal h3 { font-size: 1.15em; font-weight: 600; color: var(--accent); margin-bottom: .5em; }
+.reveal p  { font-size: .88em; line-height: 1.75; }
+.reveal ul { list-style: none; padding: 0; }
+.reveal ul li { padding-left: 1.2em; position: relative; font-size: .85em; line-height: 1.7; margin-bottom: .25em; }
+.reveal ul li::before { content: '›'; position: absolute; left: 0; color: var(--accent); font-family: var(--mono); }
+.reveal a { color: var(--accent); }
+.reveal section { padding: 0 60px; }
+.reveal .slides section { height: 100%; display: flex; flex-direction: column; justify-content: center; }
+
+/* ── Grid canvas lines on every slide ── */
+.reveal section::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(0,212,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,212,255,0.025) 1px, transparent 1px);
+  background-size: 60px 60px;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* ── Slide number ── */
+.slide-tag {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--mono); font-size: 11px; color: var(--muted);
+  border: 1px solid var(--border2); border-radius: 4px;
+  padding: 3px 10px; margin-bottom: 16px;
+  background: rgba(0,212,255,0.04);
+}
+.slide-tag span { color: var(--accent); font-weight: 700; }
+
+/* ── Accent line title ── */
+.title-line { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+.title-line h2 { margin: 0; }
+.title-bar { flex: 1; height: 1px; background: linear-gradient(90deg, var(--accent), transparent); }
+
+/* ── Cards ── */
+.cards { display: grid; gap: 12px; }
+.cards-2 { grid-template-columns: 1fr 1fr; }
+.cards-3 { grid-template-columns: 1fr 1fr 1fr; }
+.cards-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+.cards-5 { grid-template-columns: repeat(5, 1fr); }
+
+.card {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 10px; padding: 16px 18px;
+  position: relative; overflow: hidden;
+}
+.card::after {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, var(--accent), transparent);
+}
+.card.green::after { background: linear-gradient(90deg, var(--green), transparent); }
+.card.orange::after { background: linear-gradient(90deg, var(--orange), transparent); }
+.card.purple::after { background: linear-gradient(90deg, var(--purple), transparent); }
+.card.yellow::after { background: linear-gradient(90deg, var(--yellow), transparent); }
+.card.red::after    { background: linear-gradient(90deg, var(--red), transparent); }
+
+.card-num {
+  font-family: var(--mono); font-size: 28px; font-weight: 700;
+  line-height: 1; margin-bottom: 6px;
+}
+.card-label { font-size: 11px; color: var(--muted); line-height: 1.5; }
+.card-title { font-size: 13px; font-weight: 700; margin-bottom: 4px; font-family: var(--mono); }
+.card-body  { font-size: 11.5px; color: var(--muted); line-height: 1.6; }
+
+/* ── Layer stack ── */
+.layer {
+  border-radius: 8px; padding: 13px 18px;
+  display: flex; align-items: center; gap: 16px;
+  border: 1px solid; margin-bottom: 6px;
+  position: relative;
+}
+.layer-tag {
+  font-family: var(--mono); font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1px;
+  min-width: 72px; padding: 3px 8px; border-radius: 4px;
+  text-align: center;
+}
+.layer-name { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+.layer-desc { font-size: 11px; color: var(--muted); }
+.lc { background: rgba(0,212,255,.06); border-color: rgba(0,212,255,.3); }
+.lc .layer-tag { background: rgba(0,212,255,.12); color: var(--accent); }
+.lg { background: rgba(0,255,157,.06); border-color: rgba(0,255,157,.3); }
+.lg .layer-tag { background: rgba(0,255,157,.12); color: var(--green); }
+.lo { background: rgba(255,123,61,.06); border-color: rgba(255,123,61,.3); }
+.lo .layer-tag { background: rgba(255,123,61,.12); color: var(--orange); }
+.lp { background: rgba(176,108,255,.06); border-color: rgba(176,108,255,.3); }
+.lp .layer-tag { background: rgba(176,108,255,.12); color: var(--purple); }
+.lm { background: rgba(90,112,144,.06); border-color: rgba(90,112,144,.3); }
+.lm .layer-tag { background: rgba(90,112,144,.12); color: var(--muted); }
+.layer-arrow { text-align: center; color: var(--border2); font-size: 14px; line-height: 1; margin-bottom: 2px; }
+
+/* ── Code block ── */
+.code-block {
+  background: #050810; border: 1px solid var(--border2);
+  border-radius: 8px; padding: 16px 18px;
+  font-family: var(--mono); font-size: 12px; line-height: 1.75;
+  overflow: hidden; position: relative;
+}
+.code-block::before {
+  content: attr(data-title);
+  display: block; font-size: 10px; color: var(--muted);
+  margin-bottom: 10px; padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.kw  { color: #ff7b72; }
+.fn  { color: #c9a0ff; }
+.str { color: #7ee8ff; }
+.cm  { color: #4a5f75; font-style: italic; }
+.ty  { color: #ffa657; }
+.num { color: #79c0ff; }
+.op  { color: #66d9ef; }
+
+/* ── Callout ── */
+.callout {
+  border-radius: 8px; padding: 12px 16px;
+  border-left: 3px solid; font-size: 12.5px; line-height: 1.7;
+}
+.callout strong { color: var(--text); font-weight: 700; }
+.callout.c { background: rgba(0,212,255,.06); border-color: var(--accent); color: #90cce0; }
+.callout.g { background: rgba(0,255,157,.06); border-color: var(--green); color: #78d9b5; }
+.callout.o { background: rgba(255,123,61,.06); border-color: var(--orange); color: #d9a578; }
+.callout.p { background: rgba(176,108,255,.06); border-color: var(--purple); color: #b890e0; }
+
+/* ── Table ── */
+.styled-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.styled-table th {
+  padding: 8px 12px; text-align: left; font-size: 11px;
+  color: var(--muted); font-weight: 500; font-family: var(--mono);
+  border-bottom: 1px solid var(--border2);
+  background: rgba(0,0,0,.4);
+}
+.styled-table td {
+  padding: 9px 12px; border-bottom: 1px solid rgba(30,42,58,.6);
+  line-height: 1.5; vertical-align: top;
+}
+.styled-table tr:last-child td { border-bottom: none; }
+.styled-table tr:hover td { background: rgba(255,255,255,.02); }
+td.mono-col { font-family: var(--mono); font-size: 11px; color: var(--green); }
+
+/* ── Timeline ── */
+.timeline { display: flex; flex-direction: column; }
+.tl { display: flex; gap: 14px; padding-bottom: 14px; position: relative; }
+.tl:not(:last-child)::after {
+  content: ''; position: absolute; left: 15px; top: 32px; bottom: 0;
+  width: 1px; background: var(--border2);
+}
+.tl-dot {
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+  border: 2px solid; display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 11px; font-weight: 700;
+}
+.tl-body { flex: 1; padding-top: 4px; }
+.tl-title { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+.tl-detail { font-size: 11px; color: var(--muted); line-height: 1.6; }
+.tc .tl-dot { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,.1); }
+.tg .tl-dot { border-color: var(--green); color: var(--green); background: rgba(0,255,157,.1); }
+.to .tl-dot { border-color: var(--orange); color: var(--orange); background: rgba(255,123,61,.1); }
+.tp .tl-dot { border-color: var(--purple); color: var(--purple); background: rgba(176,108,255,.1); }
+.ty2 .tl-dot { border-color: var(--yellow); color: var(--yellow); background: rgba(255,209,102,.1); }
+.tm .tl-dot { border-color: var(--muted); color: var(--muted); background: rgba(90,112,144,.1); }
+
+/* ── Compact bars ── */
+.compact-item {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 10px 14px;
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 7px;
+}
+.compact-badge {
+  font-family: var(--mono); font-size: 10px; font-weight: 700;
+  padding: 3px 8px; border-radius: 4px; white-space: nowrap;
+  min-width: 64px; text-align: center;
+}
+.compact-info { flex: 1; }
+.compact-name { font-size: 12.5px; font-weight: 700; margin-bottom: 2px; }
+.compact-desc { font-size: 11px; color: var(--muted); }
+.cost-bar { width: 80px; height: 5px; border-radius: 3px; background: var(--border); flex-shrink: 0; overflow: hidden; }
+.cost-fill { height: 100%; border-radius: 3px; transition: width 1s ease; }
+
+/* ── Two col ── */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+
+/* ── Security pipeline ── */
+.pipe { display: flex; align-items: center; gap: 0; margin: 16px 0; }
+.pipe-step {
+  flex: 1; background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 12px 10px; text-align: center;
+}
+.pipe-arrow { padding: 0 6px; color: var(--border2); font-family: var(--mono); }
+.pipe-num { font-family: var(--mono); font-size: 11px; font-weight: 700; margin-bottom: 4px; }
+.pipe-name { font-size: 11px; font-weight: 700; margin-bottom: 2px; }
+.pipe-detail { font-size: 10px; color: var(--muted); }
+
+/* ── Agent tree ── */
+.agent-tree { display: flex; flex-direction: column; align-items: center; }
+.agent-box {
+  border-radius: 8px; padding: 10px 20px; border: 1px solid;
+  text-align: center; min-width: 140px;
+}
+.ab-t { font-family: var(--mono); font-size: 12px; font-weight: 700; margin-bottom: 2px; }
+.ab-s { font-size: 10px; color: var(--muted); }
+.agent-line { width: 1px; height: 20px; background: var(--border2); }
+.agent-fork { display: flex; gap: 24px; position: relative; }
+.agent-fork::before {
+  content: ''; position: absolute;
+  top: 0; left: 50%; width: 80%; height: 1px;
+  background: var(--border2); transform: translateX(-50%);
+}
+.afc { display: flex; flex-direction: column; align-items: center; }
+
+/* ── Pill / badge ── */
+.pill {
+  display: inline-block; font-family: var(--mono); font-size: 10px;
+  padding: 2px 8px; border-radius: 10px; border: 1px solid; margin: 2px;
+}
+.pill.c { color: var(--accent); border-color: rgba(0,212,255,.3); background: rgba(0,212,255,.07); }
+.pill.g { color: var(--green); border-color: rgba(0,255,157,.3); background: rgba(0,255,157,.07); }
+.pill.o { color: var(--orange); border-color: rgba(255,123,61,.3); background: rgba(255,123,61,.07); }
+.pill.p { color: var(--purple); border-color: rgba(176,108,255,.3); background: rgba(176,108,255,.07); }
+.pill.y { color: var(--yellow); border-color: rgba(255,209,102,.3); background: rgba(255,209,102,.07); }
+
+/* ── Divider ── */
+hr.slim { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+
+/* ══════════════════════
+   HERO SLIDE
+   ══════════════════════ */
+.hero-slide {
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column;
+  justify-content: center; min-height: 100vh;
+  padding: 0 80px !important;
+}
+.hero-glow {
+  position: absolute; top: -20%; left: -10%;
+  width: 60%; height: 80%;
+  background: radial-gradient(ellipse, rgba(0,212,255,.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero-glow2 {
+  position: absolute; bottom: -20%; right: -5%;
+  width: 50%; height: 70%;
+  background: radial-gradient(ellipse, rgba(176,108,255,.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero-eyebrow {
+  font-family: var(--mono); font-size: 11px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: 3px; margin-bottom: 20px;
+  display: flex; align-items: center; gap: 12px;
+}
+.hero-eyebrow::before { content: ''; width: 32px; height: 1px; background: var(--accent); }
+.hero h1 { color: var(--text); margin-bottom: 12px; line-height: 1.1; }
+.hero h1 em { font-style: normal; color: var(--accent); }
+.hero-sub {
+  font-size: 15px; color: var(--muted); line-height: 1.8; margin-bottom: 32px;
+  max-width: 600px;
+}
+.hero-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.hero-stat-row { display: flex; gap: 32px; margin-top: 40px; padding-top: 28px; border-top: 1px solid var(--border); }
+.hero-stat { }
+.hero-stat-num { font-family: var(--mono); font-size: 26px; font-weight: 700; margin-bottom: 4px; }
+.hero-stat-label { font-size: 11px; color: var(--muted); }
+
+/* ══════════════════════
+   LIVE DEMO SLIDES
+   ══════════════════════ */
+.demo-panel {
+  background: #050810; border: 1px solid var(--border2);
+  border-radius: 10px; overflow: hidden;
+  font-family: var(--mono);
+}
+.demo-titlebar {
+  background: var(--surface2); padding: 8px 14px;
+  display: flex; align-items: center; gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.demo-dot { width: 10px; height: 10px; border-radius: 50%; }
+.demo-title { font-size: 11px; color: var(--muted); margin-left: 6px; }
+.demo-body { padding: 16px 18px; font-size: 12px; line-height: 1.75; min-height: 160px; }
+
+/* loop animator */
+.loop-step { display: none; }
+.loop-step.active { display: block; animation: fadeIn .3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
+
+/* compaction demo */
+.token-bar-wrap { margin: 8px 0; }
+.token-label { font-size: 10px; color: var(--muted); margin-bottom: 3px; }
+.token-bar-bg { height: 12px; background: var(--border); border-radius: 3px; overflow: hidden; position: relative; }
+.token-bar-fill { height: 100%; border-radius: 3px; transition: width .8s cubic-bezier(.4,0,.2,1); }
+.token-pct { position: absolute; right: 6px; top: 0; font-size: 9px; color: var(--text); line-height: 12px; }
+
+/* permission demo */
+.perm-log { font-size: 11px; line-height: 1.9; }
+.perm-log .ok   { color: var(--green); }
+.perm-log .warn { color: var(--yellow); }
+.perm-log .deny { color: var(--red); }
+.perm-log .ask  { color: var(--accent); }
+.perm-log .dim  { color: var(--muted); }
+.cursor-blink { animation: blink .8s infinite; }
+@keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0;} }
+
+/* agent demo */
+.agent-log { font-size: 11px; line-height: 1.9; }
+.agent-log .main  { color: var(--accent); }
+.agent-log .sub-a { color: var(--green); }
+.agent-log .sub-b { color: var(--orange); }
+.agent-log .sub-c { color: var(--purple); }
+.agent-log .done  { color: var(--yellow); }
+.agent-log .dim   { color: var(--muted); }
+
+/* demo controls */
+.demo-controls {
+  display: flex; gap: 8px; padding: 10px 14px;
+  border-top: 1px solid var(--border); background: var(--surface2);
+  align-items: center;
+}
+.btn {
+  font-family: var(--mono); font-size: 11px; cursor: pointer;
+  padding: 5px 14px; border-radius: 5px; border: 1px solid;
+  transition: all .15s;
+}
+.btn-primary { background: rgba(0,212,255,.12); color: var(--accent); border-color: rgba(0,212,255,.4); }
+.btn-primary:hover { background: rgba(0,212,255,.22); }
+.btn-ghost { background: transparent; color: var(--muted); border-color: var(--border); }
+.btn-ghost:hover { color: var(--text); border-color: var(--border2); }
+.demo-status { font-size: 10px; color: var(--muted); margin-left: auto; font-family: var(--mono); }
+
+/* ══════════════════════
+   PROGRESS BAR OVERRIDE
+   ══════════════════════ */
+.reveal .progress { background: rgba(0,0,0,.3); height: 3px; }
+.reveal .progress span { background: var(--accent); }
+.reveal .slide-number { font-family: var(--mono); font-size: 11px; color: var(--muted); background: none; }
+
+/* ══════════════════════
+   FRAGMENT ANIMATIONS
+   ══════════════════════ */
+.reveal .fragment.fade-right { transform: translateX(-20px); }
+.reveal .fragment.fade-right.visible { transform: none; }
+</style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ════════════════════════════════════════
+     SLIDE 0 — HERO
+     ════════════════════════════════════════ -->
+<section class="hero-slide">
+  <div class="hero-glow"></div>
+  <div class="hero-glow2"></div>
+  <div class="hero-eyebrow">Architecture Deep Dive · 2026</div>
+  <h1><em>Claude Code</em><br>源码解析与架构设计</h1>
+  <div class="hero-sub">
+    基于 v2.1.88 源码分析 · 一次 npm source map 泄露<br>
+    窥见 Anthropic 生产级 AI Agent 完整工程实现
+  </div>
+  <div class="hero-pills">
+    <span class="pill c">Agentic Loop</span>
+    <span class="pill g">Context Compaction</span>
+    <span class="pill o">Permission System</span>
+    <span class="pill p">Multi-Agent</span>
+    <span class="pill y">MCP Protocol</span>
+  </div>
+  <div class="hero-stat-row">
+    <div class="hero-stat">
+      <div class="hero-stat-num" style="color:var(--accent)">512K</div>
+      <div class="hero-stat-label">行 TypeScript</div>
+    </div>
+    <div class="hero-stat">
+      <div class="hero-stat-num" style="color:var(--green)">4,600+</div>
+      <div class="hero-stat-label">源文件数</div>
+    </div>
+    <div class="hero-stat">
+      <div class="hero-stat-num" style="color:var(--orange)">50+</div>
+      <div class="hero-stat-label">内置工具</div>
+    </div>
+    <div class="hero-stat">
+      <div class="hero-stat-num" style="color:var(--purple)">27%</div>
+      <div class="hero-stat-label">新类型任务占比</div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════
+     SLIDE 1 — 背景事件
+     ════════════════════════════════════════ -->
+<section>
+  <div class="slide-tag"><span>01</span> 背景</div>
+  <div class="title-line"><h2>这一切是怎么开始的</h2><div class="title-bar"></div></div>
+  <div class="callout o" style="margin-bottom:18px">
+    <strong>2026年3月31日</strong>：研究员 Chaofan Shou 发现 npm 包遗留 <code>.map</code> source map 调试文件，映射了完整 TypeScript 源码。不是 hack，只是构建流程配置疏忽。Reddit r/LocalLLaMA 几小时内完成全量解析。
+  </div>
+  <table class="styled-table">
+    <thead><tr><th>模块</th><th>官方 GitHub (279文件)</th><th>泄露源码 (4600+文件)</th></tr></thead>
+    <tbody>
+      <tr><td class="mono-col">核心引擎 query.ts</td><td>❌ 未包含</td><td>✅ 完整 1729 行</td></tr>
+      <tr><td class="mono-col">权限系统</td><td>❌ 未包含</td><td>✅ permissions.ts 52K 行</td></tr>
+      <tr><td class="mono-col">MCP 客户端</td><td>❌ 未包含</td><td>✅ client.ts 119K 行</td></tr>
+      <tr><td class="mono-col">工具实现 (50+)</td><td>❌ 未包含</td><td>✅ Bash/Read/Write/Edit…</td></tr>
+      <tr><td class="mono-col">Context Compaction</td><td>❌ 未包含</td><td>✅ 5级压缩管线</td></tr>
+    </tbody>
+  </table>
+  <div class="callout c" style="margin-top:14px">
+    <strong>核心发现：</strong>Claude Code 不是 API 封装器，而是一个完整的 <strong>Agentic Runtime</strong>——独立推理、工具执行、会话管理三层分离的生产级系统。
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════
+     SLIDE 2 — 技术栈
+     ════════════════════════════════════════ -->
+<section>
+  <div class="slide-tag"><span>02</span> 技术栈</div>
+  <div class="title-line"><h2>技术选型 & 工程决策</h2><div class="title-bar"></div></div>
+  <table class="styled-table">
+    <thead><tr><th>层次</th><th>选型</th><th>核心原因</th><th>Java 类比</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="mono-col">运行时</td>
+        <td><strong>Bun</strong></td>
+        <td>原生 TS 支持，启动快，<code>feature()</code> dead-code 消除</td>
+        <td>GraalVM Native Image</td>
+      </tr>
+      <tr>
+        <td class="mono-col">语言</td>
+        <td><strong>TypeScript strict</strong></td>
+        <td>4600 文件规模下，类型安全是必须</td>
+        <td>Java + Lombok + Validation</td>
+      </tr>
+      <tr>
+        <td class="mono-col">Terminal UI</td>
+        <td><strong>React 18 + Ink</strong></td>
+        <td>权限弹窗、进度条、多面板——终端 UI 够复杂</td>
+        <td>JavaFX (in terminal)</td>
+      </tr>
+      <tr>
+        <td class="mono-col">Feature Flag</td>
+        <td><strong>GrowthBook</strong></td>
+        <td>服务端 A/B + kill switch，未发布功能门控</td>
+        <td>LaunchDarkly</td>
+      </tr>
+      <tr>
+        <td class="mono-col">工具协议</td>
+        <td><strong>MCP SDK</strong></td>
+        <td>标准化 LLM ↔ 外部工具通信协议</td>
+        <td>SPI + gRPC/JSON-RPC</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="callout c" style="margin-top:14px;font-size:12px">
+    <strong>设计信号：</strong>Bun 的 <code>feature()</code> flag 让构建时直接消除 dead code，免 bundle 体积膨胀——这和 Spring Profile + conditional bean 思路相同，但在编译时解决。
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════
+     SLIDE 3 — 五层架构
+     ════════════════════════════════════════ -->
+<section>
+  <div class="slide-tag"><span>03</span> 架构总览</div>
+  <div class="title-line"><h2>五层架构</h2><div class="title-bar"></div></div>
+  <div class="layer lp">
+    <span class="layer-tag">SURFACE</span>
+    <div><div class="layer-name" style="color:var(--purple)">表现层 — 入口与渲染</div>
+    <div class="layer-desc">cli.tsx · mcp.ts · SDK server · daemon/bridge/ssh · React 18 + Ink TUI</div></div>
+  </div>
+  <div class="layer-arrow">↓</div>
+  <div class="layer lg">
+    <span class="layer-tag">CORE</span>
+    <div><div class="layer-name" style="color:var(--green)">核心层 — Agent Loop 主循环</div>
+    <div class="layer-desc">query.ts (1729行 while-true) · Async Generator · Compaction Pipeline</div></div>
+  </div>
+  <div class="layer-arrow">↓</div>
+  <div class="layer lo">
+    <span class="layer-tag">SAFETY</span>
+    <div><div class="layer-name" style="color:var(--orange)">安全层 — 权限与工具执行</div>
+    <div class="layer-desc">Permission System · PreToolUse Hook · Rule Evaluator · Shell Sandbox</div></div>
+  </div>
+  <div class="layer-arrow">↓</div>
+  <div class="layer lc">
+    <span class="layer-tag">STATE</span>
+    <div><div class="layer-name" style="color:var(--accent)">状态层 — 上下文与记忆</div>
+    <div class="layer-desc">Context Assembly · CLAUDE.md Hierarchy · Session JSONL · Sidechain Transcripts</div></div>
+  </div>
+  <div class="layer-arrow">↓</div>
+  <div class="layer lm">
+    <span class="layer-tag">BACKEND</span>
+    <div><div class="layer-name" style="color:var(--muted)">后端层 — 执行引擎与外部资源</div>
+    <div class="layer-desc">Claude API · MCP Servers · Bash/Shell · File System · Web Services</div></div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════
+     SLIDE 4 — Agent Loop 原理
+     ════════════════════════════════════════ -->
+<section>
+  <div class="slide-tag"><span>04</span> 核心引擎</div>
+  <div class="title-line"><h2>Agentic Loop 主循环</h2><div class="title-bar"></div></div>
+  <div class="two-col">
+    <div>
+      <h3>函数签名</h3>
+      <div class="code-block" data-title="src/query.ts  (核心函数)">
+<span class="cm">// 1729行心脏 — Async Generator</span>
+<span class="kw">export async function</span>* <span class="fn">query</span>(
+  params: <span class="ty">QueryParams</span>
+): <span class="ty">AsyncGenerator</span>&lt;
+  <span class="ty">StreamEvent</span> | <span class="ty">Message</span>,
+  <span class="ty">Terminal</span>  <span class="cm">// return: 终止原因</span>
+&gt; {
+  <span class="kw">let</span> state: <span class="ty">State</span> = initState(params)
+  <span class="kw">while</span> (<span class="op">true</span>) {
+    <span class="cm">// 1. Pre-compaction</span>
+    <span class="cm">// 2. API call + stream</span>
+    <span class="cm">// 3. Tool authorization</span>
+    <span class="cm">// 4. Execute tools</span>
+    <span class="cm">// 5. Recovery</span>
+    <span class="cm">// 6. Stop check</span>
+    state = applyTransition(state)
+  }
+}</div>
+      <div class="callout g" style="margin-top:10px;font-size:11px">
+        <strong>Java 类比：</strong><code>Flux&lt;T&gt;</code>（Project Reactor），但用语言原生语法，无需框架依赖，错误通过 throw 传播，终止原因从 return 拿。
+      </div>
+    </div>
+    <div>
+      <h3>不可变参数 vs 可变状态</h3>
+      <div class="code-block" data-title="Continue Site 模式 — 原子状态替换">
+<span class="cm">// 不可变 (整个循环不变)</span>
+<span class="kw">type</span> <span class="ty">QueryParams</span> = {
+  systemPrompt: <span class="ty">string</span>
+  canUseTool:   <span class="ty">CanUseToolFn</span>
+  maxTurns?:    <span class="ty">number</span>
+}
+
+<span class="cm">// 可变 (每次迭代原子替换)</span>
+<span class="kw">type</span> <span class="ty">State</span> = {
+  messages:   <span class="ty">Message</span>[]
+  turnCount:  <span class="ty">number</span>
+  transition: <span class="ty">Continue</span> | <span class="ty">undefined</span>
+}
+
+<span class="cm">// ✅ 原子替换，防止中间状态</span>
+state = { ...state,
+  messages: newMessages,
+  turnCount: state.turnCount + <span class="num">1</span>,
+  transition: { reason: <span class="str">'next_turn'</span> }
+}</div>
+      <div class="callout c" style="margin-top:10px;font-size:11px">
+        <strong>来自 React setState 哲学：</strong>状态整体原子替换，不逐字段修改，确保任何时刻 state 对象都是一致快照。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════
+     SLIDE 5 — LIVE DEMO: Agent Loop
+     ════════════════════════════════════════ -->
+<section>
+  <div class="slide-tag"><span>05</span> 实时演示</div>
+  <div class="title-line"><h2>🖥 Demo — Agent Loop 执行过程</h2><div class="title-bar"></div></div>
+  <div class="two-col">
+    <div>
+      <h3>Turn 流水线（6阶段）</h3>
+      <div class="timeline">
+        <div class="tl tc"><div class="tl-dot">1</div><div class="tl-body"><div class="tl-title">Pre-Request Compaction</div><div class="tl-detail">cheapest-first 压缩策略</div></div></div>
+        <div class="tl tg"><div class="tl-dot">2</div><div class="tl-body"><div class="tl-title">API Call & Streaming</div><div class="tl-detail">只读工具并行执行</div></div></div>
+        <div class="tl to"><div class="tl-dot">3</div><div class="tl-body"><div class="tl-title">Tool Authorization</div><div class="tl-detail">4级鉴权管线</div></div></div>
+        <div class="tl tp"><div class="tl-dot">4</div><div class="tl-body"><div class="tl-title">Tool Execution</div><div class="tl-detail">并发安全工具并行</div></div></div>
+        <div class="tl ty2"><div class="tl-dot">5</div><div class="tl-body"><div class="tl-title">Recovery</div><div class="tl-detail">token 超限 / 错误重试</div></div></div>
+        <div class="tl tm"><div class="tl-dot">6</div><div class="tl-body"><div class="tl-title">Stop Check</div><div class="tl-detail">maxTurns / end_turn / 中断</div></div></div>
+      </div>
+    </div>
+    <div>
+      <h3>模拟运行</h3>
+      <div class="demo-panel">
+        <div class="demo-titlebar">
+          <div class="demo-dot" style="background:#ff5f57"></div>
+          <div class="demo-dot" style="background:#febc2e"></div>
+          <div class="demo-dot" style="background:#28c840"></div>
+          <span class="demo-title">claude-loop-simulator</span>
+        </div>
+        <div class="demo-body" id="loopDemo">
+          <div class="perm-log" id="loopLog">
+            <span class="dim">$ 等待启动演示...</span><br>
+            <span class="cursor-blink">▋</span>
+          </div>
+        </div>
+        <div class="demo-controls">
+          <button class="btn btn-primary" onclick="runLoopDemo()">▶ 运行 Demo</button>
+          <button class="btn btn-ghost" onclick="resetLoopDemo()">↺ 重置</button>
+          <span class="demo-status" id="loopStatus">ready</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════
+     SLIDE 6 — 工具系统
+     ════════════════════════════════════════ -->
+<section>
+  <div class="slide-tag"><span>06</span> 工具系统</div>
+  <div class="title-line"><h2>Tool System — 50+ 工具设计哲学</h2><div class="title-bar"></div></div>
+  <div class="callout o" style="margin-bottom:14px">
+    <strong>核心原则：</strong>每个工具自带 input schema、permission level、execution logic。没有工具间共享的可变状态——BashTool 和 FileReadTool 在同一注册表，但风险画像完全不同，架构分别对待。
+  </div>
+  <div class="cards cards-3" style="margin-bottom:14px">
+    <div class="card green">
+      <div class="card-title">FileReadTool / GlobTool / GrepTool</div>
+      <div class="card-body">只读 · <code>isConcurrencySafe: true</code><br>流式响应时就开始并行执行，不等模型停止生成</div>
+    </div>
+    <div class="card orange">
+      <div class="card-title">FileEditTool / FileWriteTool</div>
+      <div class="card-body">写操作 · <code>isConcurrencySafe: false</code><br>独占执行，不与任何其他工具并发</div>
+    </div>
+    <div class="card yellow">
+      <div class="card-title">BashTool / AgentTool</div>
+      <div class="card-body">高危 · <code>gated + sandboxed</code><br>4级授权管线 + 沙箱隔离 + 子 Agent 隔离 context</div>
+    </div>
+  </div>
+  <div class="code-block" data-title="StreamingToolExecutor.ts — 并发安全核心逻辑">
+<span class="kw">private</span> <span class="fn">canExecuteTool</span>(isConcurrencySafe: <span class="ty">boolean</span>): <span class="ty">boolean</span> {
+  <span class="kw">const</span> executing = <span class="kw">this</span>.tools.filter(t => t.status === <span class="str">'executing'</span>)
+  <span class="kw">return</span> (
+    executing.length === <span class="num">0</span> ||
+    (isConcurrencySafe && executing.every(t => t.isConcurrencySafe))
+  )
+  <span class="cm">// Java 类比：ReadWriteLock — 多读一写</span>
+}</div>
+</section>
+
+<!-- ════════════════════════════════════════
+     SLIDE 7 — Context Compaction 原理
+     ════════════════════════════════════════ -->
+<section>
+  <div class="slide-tag"><span>07</span> Context 管理</div>
+  <div class="title-line"><h2>Context 压缩管线</h2><div class="title-bar"></div></div>
+  <div class="callout o" style="margin-bottom:14px;font-size:12px">
+    <strong>核心瓶颈：</strong>LLM Context Window 是有限资源。所有优化都围绕这个约束展开。5级策略按 <strong>cheapest-first</strong> 顺序执行——一旦当前层达到阈值，不触发更高成本的层。
+  </div>
+  <div>
+    <div class="compact-item">
+      <div class="compact-badge" style="background:rgba(0,255,157,.12);color:var(--green)">L1</div>
+      <div class="compact-info"><div class="compact-name">Tool Result Budget</div><div class="compact-desc">截断过大工具结果（文件读取、搜索结果），保留关键内容</div></div>
+      <div class="cost-bar"><div class="cost-fill" style="width:8%;background:var(--green)"></div></div>
+    </div>
+    <div class="compact-item">
+      <div class="compact-badge" style="background:rgba(0,212,255,.12);color:var(--accent)">L2</div>
+      <div class="compact-info"><div class="compact-name">Snip Compact <span class="pill c">HISTORY_SNIP flag</span></div><div class="compact-desc">直接丢弃最旧消息块，最激进但成本最低</div></div>
+      <div class="cost-bar"><div class="cost-fill" style="width:20%;background:var(--accent)"></div></div>
+    </div>
+    <div class="compact-item">
+      <div class="compact-badge" style="background:rgba(255,209,102,.12);color:var(--yellow)">L3</div>
+      <div class="compact-info"><div class="compact-name">Microcompact</div><div class="compact-desc">Prompt Cache 感知，选择性清除单个工具结果，不破坏缓存边界</div></div>
+      <div class="cost-bar"><div class="cost-fill" style="width:35%;background:var(--yellow)"></div></div>
+    </div>
+    <div class="compact-item">
+      <div class="compact-badge" style="background:rgba(176,108,255,.12);color:var(--purple)">L4</div>
+      <div class="compact-info"><div class="compact-name">Context Collapse <span class="pill p">CONTEXT_COLLAPSE flag</span></div><div class="compact-desc">分阶段折叠消息块，生成压缩视图，不修改原始数据</div></div>
+      <div class="cost-bar"><div class="cost-fill" style="width:58%;background:var(--purple)"></div></div>
+    </div>
+    <div class="compact-item">
+      <div class="compact-badge" style="background:rgba(255,123,61,.12);color:var(--orange)">L5</div>
+      <div class="compact-info"><div class="compact-name">Auto-Compact（LLM 摘要）</div><div class="compact-desc">阈值触发，调用 LLM 对整段对话摘要——最贵，L4 通过后跳过</div></div>
+      <div class="cost-bar"><div class="cost-fill" style="width:100%;background:var(--orange)"></div></div>
+    </div>
+  </div>
+  <div class="callout g" style="margin-top:10px;font-size:11.5px">
+    <strong>Java GC 类比：</strong>Minor GC (L1-L2) → CMS incremental (L3-L4) → Full GC (L5)。Context Collapse 必须在 Auto-Compact 之前——Collapse 成功则跳过一次 API 调用费用。
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════
+     SLIDE 8 — LIVE DEMO: Compaction
+     ════════════════════════════════════════ -->
+<section>
+  <div class="slide-tag"><span>08</span> 实时演示</div>
+  <div class="title-line"><h2>🖥 Demo — Context 压缩过程</h2><div class="title-bar"></div></div>
+  <div class="demo-panel" style="max-width:100%">
+    <div class="demo-titlebar">
+      <div class="demo-dot" style="background:#ff5f57"></div>
+      <div class="demo-dot" style="background:#febc2e"></div>
+      <div class="demo-dot" style="background:#28c840"></div>
+      <span class="demo-title">context-compaction-visualizer</span>
+    </div>
+    <div class="demo-body" id="compactDemo" style="min-height:220px">
+      <div class="perm-log" id="compactLog">
+        <span class="dim">点击 [运行 Demo] 观察 5 级压缩管线执行过程</span>
+      </div>
+      <div style="margin-top:16px" id="tokenBars">
+        <div class="token-bar-wrap">
+          <div class="token-label">Context Window 使用率</div>
+          <div class="token-bar-bg"><div class="token-bar-fill" id="ctxBar" style="width:0%;background:var(--green)"></div><span class="token-pct" id="ctxPct">0%</span></div>
+        </div>
+        <div class="token-bar-wrap">
+          <div class="token-label">压缩后 Token 节省</div>
+          <div class="token-bar-bg"><div class="token-bar-fill" id="saveBar" style="width:0%;background:var(--accent)"></div><span class="token-pct" id="savePct">0%</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="demo-controls">
+      <button class="btn btn-primary" onclick="runCompactDemo()">▶ 运行演示</button>
+      <button class="btn btn-ghost" onclick="resetCompactDemo()">↺ 重置</button>
+      <span class="demo-status" id="compactStatus">ready</span>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════
+     SLIDE 9 — 权限系统
+     ════════════════════════════════════════ -->
+<section>
+  <div class="slide-tag"><span>09</span> 权限系统</div>
+  <div class="title-line"><h2>Permission System — Defense in Depth</h2><div class="title-bar"></div></div>
+  <h3>工具调用授权管线（4级）</h3>
+  <div class="pipe" style="margin-bottom:18px">
+    <div class="pipe-step" style="border-color:rgba(0,212,255,.3)">
+      <div class="pipe-num" style="color:var(--accent)">①</div>
+      <div class="pipe-name">Pre-filter</div>
+      <div class="pipe-detail">工具名/类型快速过滤</div>
+    </div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step" style="border-color:rgba(0,255,157,.3)">
+      <div class="pipe-num" style="color:var(--green)">②</div>
+      <div class="pipe-name">PreToolUse Hook</div>
+      <div class="pipe-detail">用户自定义脚本拦截</div>
+    </div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step" style="border-color:rgba(255,209,102,.3)">
+      <div class="pipe-num" style="color:var(--yellow)">③</div>
+      <div class="pipe-name">Rule Eval</div>
+      <div class="pipe-detail">allowList/denyList 路径检查</div>
+    </div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step" style="border-color:rgba(255,123,61,.3)">
+      <div class="pipe-num" style="color:var(--orange)">④</div>
+      <div class="pipe-name">Permission Handler</div>
+      <div class="pipe-detail">ML 分类器 or 人工确认</div>
+    </div>
+  </div>
+  <div class="cards cards-3" style="margin-bottom:14px">
+    <div class="card green">
+      <div class="card-title">Default Mode</div>
+      <div class="card-body">不确定操作均询问用户，最高控制权，适合敏感操作环境</div>
+    </div>
+    <div class="card yellow">
+      <div class="card-title">Auto Mode</div>
+      <div class="card-body">ML 分类器评估风险，低风险自动执行，高风险仍需确认</div>
+    </div>
+    <div class="card orange">
+      <div class="card-title">Headless / CI Mode</div>
+      <div class="card-body">无人值守，依赖预设规则集，适合 CI/CD 流水线</div>
+    </div>
+  </div>
+  <div class="callout c" style="font-size:12px">
+    <strong>Java 类比：</strong>Spring Security <code>SecurityFilterChain</code> + 自定义 <code>AccessDecisionVoter</code>，但鉴权对象是"AI 即将执行的动作"而非"HTTP 请求"。Anthropic 信念：<em>人类始终保留对 Agent 目标追求方式的控制权。</em>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════
+     SLIDE 10 — LIVE DEMO: Permission
+     ════════════════════════════════════════ -->
+<section>
+  <div class="slide-tag"><span>10</span> 实时演示</div>
+  <div class="title-line"><h2>🖥 Demo — 权限鉴权管线</h2><div class="title-bar"></div></div>
+  <div class="two-col">
+    <div>
+      <h3>场景：5个工具调用请求</h3>
+      <ul>
+        <li><span class="pill g">READ</span> 读取 src/main.java</li>
+        <li><span class="pill c">GREP</span> 搜索关键词 "password"</li>
+        <li><span class="pill y">WRITE</span> 写入 config.properties</li>
+        <li><span class="pill o">BASH</span> 执行 rm -rf ./temp</li>
+        <li><span class="pill p">AGENT</span> 派生子 Agent 分析日志</li>
+      </ul>
+      <div class="callout o" style="margin-top:14px;font-size:11px">
+        <strong>观察：</strong>不同风险级别的工具请求触发不同级别的鉴权流程——从自动通过到弹出人工确认对话框。
+      </div>
+    </div>
+    <div>
+      <div class="demo-panel">
+        <div class="demo-titlebar">
+          <div class="demo-dot" style="background:#ff5f57"></div>
+          <div class="demo-dot" style="background:#febc2e"></div>
+          <div class="demo-dot" style="background:#28c840"></div>
+          <span class="demo-title">permission-pipeline-demo</span>
+        </div>
+        <div class="demo-body" style="min-height:200px">
+          <div class="perm-log" id="permLog">
+            <span class="dim">点击运行，观察权限管线执行...</span><br>
+            <span class="cursor-blink">▋</span>
+          </div>
+        </div>
+        <div class="demo-controls">
+          <button class="btn btn-primary" onclick="runPermDemo()">▶ 模拟执行</button>
+          <button class="btn btn-ghost" onclick="resetPermDemo()">↺ 重置</button>
+          <span class="demo-status" id="permStatus">ready</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════
+     SLIDE 11 — 多 Agent
+     ════════════════════════════════════════ -->
+<section>
+  <div class="slide-tag"><span>11</span> 多 Agent</div>
+  <div class="title-line"><h2>Multi-Agent 架构</h2><div class="title-bar"></div></div>
+  <div class="two-col">
+    <div>
+      <h3>子 Agent 隔离模型</h3>
+      <ul>
+        <li>独立 file cache（从父 Agent 克隆）</li>
+        <li>独立 AbortController（异步）或共享（同步）</li>
+        <li>独立 transcript JSONL sidechain</li>
+        <li>过滤后的工具池（按 Agent 定义限制）</li>
+        <li>以纯文本向父 Agent 返回结果</li>
+        <li>权限不继承，resume 时不恢复子 Agent 权限</li>
+      </ul>
+      <div class="callout p" style="margin-top:12px;font-size:11.5px">
+        <strong>Java 类比：</strong>ForkJoinTask，但 worker 是独立 LLM 实例，通信通道是自然语言而非方法调用返回值。
+      </div>
+      <div class="callout c" style="margin-top:8px;font-size:11.5px">
+        <strong>未发布 Coordinator Mode：</strong>feature flag 已存在，多 worker 并行，类似 MapReduce Map 阶段。
+      </div>
+    </div>
+    <div>
+      <h3>委托树结构</h3>
+      <div class="agent-tree">
+        <div class="agent-box" style="background:rgba(0,212,255,.08);border-color:rgba(0,212,255,.4)">
+          <div class="ab-t" style="color:var(--accent)">Orchestrator Agent</div>
+          <div class="ab-s">主 Agent · 完整 context</div>
+        </div>
+        <div class="agent-line"></div>
+        <div class="agent-fork">
+          <div class="afc">
+            <div class="agent-line" style="height:24px"></div>
+            <div class="agent-box" style="background:rgba(0,255,157,.08);border-color:rgba(0,255,157,.35)">
+              <div class="ab-t" style="color:var(--green)">Sub-Agent A</div>
+              <div class="ab-s">读取文件<br>独立 ctx</div>
+            </div>
+          </div>
+          <div class="afc">
+            <div class="agent-line" style="height:24px"></div>
+            <div class="agent-box" style="background:rgba(255,123,61,.08);border-color:rgba(255,123,61,.35)">
+              <div class="ab-t" style="color:var(--orange)">Sub-Agent B</div>
+              <div class="ab-s">运行测试<br>独立 ctx</div>
+            </div>
+          </div>
+          <div class="afc">
+            <div class="agent-line" style="height:24px"></div>
+            <div class="agent-box" style="background:rgba(176,108,255,.08);border-color:rgba(176,108,255,.35)">
+              <div class="ab-t" style="color:var(--purple)">Sub-Agent C</div>
+              <div class="ab-s">搜索文档<br>独立 ctx</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════
+     SLIDE 12 — LIVE DEMO: Multi-Agent
+     ════════════════════════════════════════ -->
+<section>
+  <div class="slide-tag"><span>12</span> 实时演示</div>
+  <div class="title-line"><h2>🖥 Demo — Multi-Agent 协作</h2><div class="title-bar"></div></div>
+  <div class="demo-panel" style="max-width:100%">
+    <div class="demo-titlebar">
+      <div class="demo-dot" style="background:#ff5f57"></div>
+      <div class="demo-dot" style="background:#febc2e"></div>
+      <div class="demo-dot" style="background:#28c840"></div>
+      <span class="demo-title">multi-agent-orchestration-demo</span>
+    </div>
+    <div class="demo-body" style="min-height:260px">
+      <div class="agent-log" id="agentLog">
+        <span class="dim">点击运行，观察 Orchestrator 如何派发子 Agent 并行工作...</span>
+      </div>
+    </div>
+    <div class="demo-controls">
+      <button class="btn btn-primary" onclick="runAgentDemo()">▶ 启动协作演示</button>
+      <button class="btn btn-ghost" onclick="resetAgentDemo()">↺ 重置</button>
+      <span class="demo-status" id="agentStatus">ready</span>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════
+     SLIDE 13 — 扩展机制
+     ════════════════════════════════════════ -->
+<section>
+  <div class="slide-tag"><span>13</span> 扩展架构</div>
+  <div class="title-line"><h2>四种扩展机制</h2><div class="title-bar"></div></div>
+  <table class="styled-table" style="margin-bottom:14px">
+    <thead><tr><th>扩展机制</th><th>Java/Spring 类比</th><th>作用层次</th><th>典型用途</th></tr></thead>
+    <tbody>
+      <tr><td class="mono-col">MCP Server</td><td>SPI + JSON-RPC</td><td>进程级隔离</td><td>数据库、Git、自定义工具注册</td></tr>
+      <tr><td class="mono-col">Hooks</td><td>@Aspect / AOP 切面</td><td>工具生命周期</td><td>审计日志、参数验证、安全扫描</td></tr>
+      <tr><td class="mono-col">Skills</td><td>@Configuration 模块</td><td>指令/知识</td><td>项目规范注入、领域知识复用</td></tr>
+      <tr><td class="mono-col">Plugins</td><td>Maven Plugin</td><td>能力包</td><td>集成 Jira、Slack、第三方服务</td></tr>
+    </tbody>
+  </table>
+  <div class="code-block" data-title="MCP 工具注册协议示意 (JSON-RPC over stdio / HTTP SSE)">
+{
+  <span class="str">"type"</span>: <span class="str">"web_search_20250305"</span>,
+  <span class="str">"name"</span>: <span class="str">"web_search"</span>,
+  <span class="str">"input_schema"</span>: {
+    <span class="str">"type"</span>: <span class="str">"object"</span>,
+    <span class="str">"properties"</span>: { <span class="str">"query"</span>: { <span class="str">"type"</span>: <span class="str">"string"</span> } }
+  }
+}
+<span class="cm">// Claude Code 作为 MCP Client，每个 Server 独立进程（进程级隔离）</span></div>
+  <div class="callout c" style="margin-top:10px;font-size:12px">
+    <strong>为什么 4 种机制而非 1 种？</strong>MCP 扩展能力边界，Hooks 扩展控制边界，Skills 扩展知识边界，Plugins 扩展集成边界。强行统一会让每种场景都用不合适的抽象。
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════
+     SLIDE 14 — 设计哲学
+     ════════════════════════════════════════ -->
+<section>
+  <div class="slide-tag"><span>14</span> 设计哲学</div>
+  <div class="title-line"><h2>5 个核心价值观 → 13 条设计原则</h2><div class="title-bar"></div></div>
+  <div class="cards cards-5" style="margin-bottom:16px">
+    <div class="card" style="border-color:rgba(0,212,255,.3)">
+      <div style="font-size:22px;margin-bottom:6px">⚖️</div>
+      <div class="card-label">人类决策<br>权威</div>
+    </div>
+    <div class="card orange">
+      <div style="font-size:22px;margin-bottom:6px">🛡️</div>
+      <div class="card-label">安全性<br>与隐私</div>
+    </div>
+    <div class="card green">
+      <div style="font-size:22px;margin-bottom:6px">⚙️</div>
+      <div class="card-label">可靠<br>执行</div>
+    </div>
+    <div class="card purple">
+      <div style="font-size:22px;margin-bottom:6px">🚀</div>
+      <div class="card-label">能力<br>放大</div>
+    </div>
+    <div class="card yellow">
+      <div style="font-size:22px;margin-bottom:6px">🔄</div>
+      <div class="card-label">上下文<br>适应性</div>
+    </div>
+  </div>
+  <div class="callout c" style="margin-bottom:8px">
+    <strong>① 分级分层（Graduated Layering）：</strong>每个关切（安全、权限、压缩、扩展）都有独立分级机制，失败模式被隔离，不同级别可独立演进。
+  </div>
+  <div class="callout g" style="margin-bottom:8px">
+    <strong>② Append-Only 偏好可审计性：</strong>Session transcript 是 JSONL append-only 日志，支持 fork/resume/审计。类比 Event Sourcing，以查询能力换可观测性。
+  </div>
+  <div class="callout o" style="margin-bottom:12px">
+    <strong>③ 确定性 Harness 内使用模型判断：</strong>不构建显式规划器，投资稳定基础设施（context 管理、工具路由、错误恢复），让 LLM 在确定性 harness 内自主决策。
+  </div>
+  <div class="callout p" style="font-size:12px">
+    <strong>数据佐证：</strong>Anthropic 内部调研 132 名工程师，约 27% 的 Claude Code 辅助任务是"没有这个工具就不会尝试的工作"——实现质的工作流创新，而非仅仅加速现有流程。
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════
+     SLIDE 15 — Java 参考卡
+     ════════════════════════════════════════ -->
+<section>
+  <div class="slide-tag"><span>15</span> Java 参考</div>
+  <div class="title-line"><h2>Java 开发者概念映射卡</h2><div class="title-bar"></div></div>
+  <table class="styled-table">
+    <thead><tr><th>Claude Code 概念</th><th>Java/Spring 类比</th><th>核心差异</th></tr></thead>
+    <tbody>
+      <tr><td class="mono-col">Async Generator Loop</td><td>Project Reactor <code>Flux&lt;T&gt;</code></td><td>驱动源是 LLM 输出，而非数据流</td></tr>
+      <tr><td class="mono-col">Context Compaction</td><td>分级 GC (Minor→CMS→Full)</td><td>"内存"是 token，溢出代价是 API 费用</td></tr>
+      <tr><td class="mono-col">Permission Pipeline</td><td>SecurityFilterChain + Voter</td><td>鉴权对象是"AI 即将执行的动作"</td></tr>
+      <tr><td class="mono-col">isConcurrencySafe</td><td>ReadWriteLock</td><td>调度逻辑在运行时，不是 JVM 锁</td></tr>
+      <tr><td class="mono-col">MCP Server</td><td>SPI + JSON-RPC</td><td>跨进程，通信是 stdio 或 HTTP SSE</td></tr>
+      <tr><td class="mono-col">Session Transcript</td><td>Event Sourcing / Kafka log</td><td>Append-Only，支持 fork/resume/审计</td></tr>
+      <tr><td class="mono-col">SubAgent</td><td>ForkJoinTask</td><td>Worker 是独立 LLM，通信是自然语言</td></tr>
+      <tr><td class="mono-col">Continue Site Pattern</td><td>React setState / Immutable</td><td>状态原子替换，防止中间状态</td></tr>
+    </tbody>
+  </table>
+  <div class="callout g" style="margin-top:12px">
+    <strong>核心认知迁移：</strong>传统后端你控制完整执行流程。Agentic 开发你构建"围栏"（harness）——确定性安全边界、工具定义、权限规则，让 LLM 在围栏内自主决策。这是思维模式上最大的转变。
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════
+     SLIDE 16 — 参考资源
+     ════════════════════════════════════════ -->
+<section>
+  <div class="slide-tag"><span>16</span> 资源</div>
+  <div class="title-line"><h2>参考资源 & 延伸阅读</h2><div class="title-bar"></div></div>
+  <div class="two-col">
+    <div>
+      <h3>学术报告</h3>
+      <ul>
+        <li><strong>arxiv 2604.14228</strong> — "Dive into Claude Code: Design Space of AI Agent Systems"（含 5 价值观 13 原则框架）</li>
+        <li><strong>VILA-Lab GitHub</strong> — github.com/VILA-Lab/Dive-into-Claude-Code</li>
+        <li><strong>DeepWiki 25篇系列</strong> — deepwiki.com/luyao618/Claude-Code-Source-Study（中文）</li>
+      </ul>
+      <h3 style="margin-top:16px">工程博客</h3>
+      <ul>
+        <li><strong>WaveSpeed Blog</strong> — 512K 行源码完整架构拆解</li>
+        <li><strong>waiterxiaoyy/Deep-Dive-Claude-Code</strong> — 13章 + 12个可运行 Demo</li>
+        <li><strong>Zain Hasan Blog</strong> — v2.1.88 深度解析含 ASCII 架构图</li>
+      </ul>
+    </div>
+    <div>
+      <h3>官方文档</h3>
+      <ul>
+        <li>docs.anthropic.com/en/docs/claude-code</li>
+        <li>docs.anthropic.com/en/docs/build-with-claude/agents</li>
+        <li>modelcontextprotocol.io（MCP 协议规范）</li>
+      </ul>
+      <div class="callout c" style="margin-top:16px">
+        <strong>推荐学习路径（Java 后端）：</strong><br>
+        1. 理解 Agentic Loop = 类 Reactor 流式状态机<br>
+        2. 实现 Tool Interface = SPI 定义动作边界<br>
+        3. 构建 Permission Harness = FilterChain 思维<br>
+        4. MCP 协议实践 = gRPC over stdio<br>
+        5. Multi-Agent = ForkJoin + Event Sourcing
+      </div>
+    </div>
+  </div>
+  <div style="text-align:center;margin-top:24px;padding:16px;background:var(--surface);border:1px solid var(--border2);border-radius:8px">
+    <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:6px">BASED ON PUBLIC RESEARCH & COMMUNITY ANALYSIS</div>
+    <div style="font-size:15px;font-weight:700;font-family:var(--display)">Claude Code — Architecture Deep Dive · 2026</div>
+  </div>
+</section>
+
+</div><!-- /slides -->
+</div><!-- /reveal -->
+
+<!-- Reveal.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.6.1/reveal.min.js"></script>
+<script>
+Reveal.initialize({
+  hash: true,
+  slideNumber: 'c/t',
+  progress: true,
+  transition: 'fade',
+  transitionSpeed: 'fast',
+  controls: true,
+  controlsTutorial: false,
+  backgroundTransition: 'fade',
+  width: 1100,
+  height: 700,
+  margin: 0.04,
+  minScale: 0.2,
+  maxScale: 2.0,
+});
+
+/* ══════════════════════════════════════
+   DEMO 1: Agent Loop Simulator
+   ══════════════════════════════════════ */
+let loopInterval = null;
+function resetLoopDemo() {
+  clearInterval(loopInterval);
+  loopInterval = null;
+  document.getElementById('loopLog').innerHTML = '<span class="dim">$ 等待启动演示...</span><br><span class="cursor-blink">▋</span>';
+  document.getElementById('loopStatus').textContent = 'ready';
+}
+
+function runLoopDemo() {
+  resetLoopDemo();
+  const log = document.getElementById('loopLog');
+  const status = document.getElementById('loopStatus');
+
+  const steps = [
+    { delay: 100,  cls: 'dim',  text: '$ claude --model claude-sonnet-4-20250514' },
+    { delay: 600,  cls: 'ask',  text: '▶ [Turn 1] 初始化 query loop...' },
+    { delay: 1100, cls: 'dim',  text: '  ├─ systemPrompt 注入 (3.2K tokens)' },
+    { delay: 1500, cls: 'dim',  text: '  ├─ CLAUDE.md 层级加载: ./CLAUDE.md + ~/.claude/CLAUDE.md' },
+    { delay: 1900, cls: 'dim',  text: '  └─ 工具注册: 53 tools (local) + 2 MCP servers' },
+    { delay: 2400, cls: 'ask',  text: '▶ Pre-compaction 检查...' },
+    { delay: 2700, cls: 'ok',   text: '  ✓ Context: 12,400 / 200,000 tokens (6.2%) — 无需压缩' },
+    { delay: 3200, cls: 'ask',  text: '▶ 调用 Claude API (streaming)...' },
+    { delay: 3700, cls: 'dim',  text: '  ← 响应流开始 [model: claude-sonnet-4-20250514]' },
+    { delay: 4000, cls: 'dim',  text: '  ← text_delta: "我来分析这个 Java 项目的结构..."' },
+    { delay: 4300, cls: 'warn', text: '  ← tool_use: FileReadTool {path: "src/main/java"}' },
+    { delay: 4600, cls: 'ask',  text: '▶ [并发] FileReadTool 鉴权检查...' },
+    { delay: 4900, cls: 'ok',   text: '  ✓ isConcurrencySafe: true — 并行执行中' },
+    { delay: 5200, cls: 'warn', text: '  ← tool_use: GrepTool {pattern: "import", path: "src/"}' },
+    { delay: 5500, cls: 'ok',   text: '  ✓ GrepTool 也是 concurrency-safe — 并行加入' },
+    { delay: 5900, cls: 'dim',  text: '  → FileReadTool 结果: 47 文件, 12,340 行' },
+    { delay: 6300, cls: 'dim',  text: '  → GrepTool 结果: 234 匹配项' },
+    { delay: 6700, cls: 'warn', text: '  ← tool_use: BashTool {cmd: "mvn test"}' },
+    { delay: 7000, cls: 'ask',  text: '▶ BashTool 鉴权 — isConcurrencySafe: false' },
+    { delay: 7300, cls: 'warn', text: '  ⚠ 等待当前执行工具完成后独占执行...' },
+    { delay: 7800, cls: 'ok',   text: '  ✓ 用户授权: auto-approve (low risk)' },
+    { delay: 8200, cls: 'dim',  text: '  → BashTool: [INFO] Tests run: 47, Failures: 0' },
+    { delay: 8700, cls: 'ask',  text: '▶ [Turn 2] Pre-compaction 检查...' },
+    { delay: 9000, cls: 'warn', text: '  ⚠ Context: 89,200 / 200,000 tokens (44.6%)' },
+    { delay: 9300, cls: 'ok',   text: '  ✓ L1 Tool Result Budget 截断大结果 → 节省 8,200 tokens' },
+    { delay: 9700, cls: 'ok',   text: '  ✓ Context 降至 81,000 tokens — 继续' },
+    { delay: 10200, cls: 'ok',  text: '✅ Loop 持续运行中... (turnCount: 2)' },
+    { delay: 10500, cls: 'dim', text: '<span class="cursor-blink">▋</span>' },
+  ];
+
+  let html = '';
+  steps.forEach(({ delay, cls, text }) => {
+    setTimeout(() => {
+      html += `<span class="${cls}">${text}</span><br>`;
+      log.innerHTML = html;
+      const panel = log.parentElement;
+      panel.scrollTop = panel.scrollHeight;
+    }, delay);
+  });
+
+  setTimeout(() => { status.textContent = 'running...'; }, 100);
+  setTimeout(() => { status.textContent = 'turn 2 complete'; }, 10500);
+}
+
+/* ══════════════════════════════════════
+   DEMO 2: Context Compaction Visualizer
+   ══════════════════════════════════════ */
+function resetCompactDemo() {
+  const log = document.getElementById('compactLog');
+  log.innerHTML = '<span class="dim">点击 [运行 Demo] 观察 5 级压缩管线执行过程</span>';
+  setBar('ctxBar', 'ctxPct', 0, 'var(--green)');
+  setBar('saveBar', 'savePct', 0, 'var(--accent)');
+  document.getElementById('compactStatus').textContent = 'ready';
+}
+
+function setBar(barId, pctId, pct, color) {
+  const bar = document.getElementById(barId);
+  const pctEl = document.getElementById(pctId);
+  bar.style.width = pct + '%';
+  bar.style.background = color;
+  if (pctEl) pctEl.textContent = pct + '%';
+}
+
+function runCompactDemo() {
+  resetCompactDemo();
+  const log = document.getElementById('compactLog');
+  const status = document.getElementById('compactStatus');
+
+  const steps = [
+    [200,  () => { log.innerHTML = '<span class="dim">模拟长对话：已进行 40 turn...</span><br>'; setBar('ctxBar','ctxPct',30,'var(--green)'); status.textContent = 'running...'; }],
+    [900,  () => { log.innerHTML += '<span class="warn">⚠ Context 使用率增长中...</span><br>'; setBar('ctxBar','ctxPct',65,'var(--yellow)'); }],
+    [1600, () => { log.innerHTML += '<span class="warn">⚠ Context: 148,000 / 200,000 tokens (74%)</span><br>'; setBar('ctxBar','ctxPct',74,'var(--yellow)'); }],
+    [2200, () => { log.innerHTML += '<span class="ask">▶ 触发 Pre-compaction 管线...</span><br>'; }],
+    [2700, () => { log.innerHTML += '<span class="dim">  [L1] Tool Result Budget 检查...</span><br>'; }],
+    [3100, () => { log.innerHTML += '<span class="ok">  ✓ L1: 截断 3 个大型工具结果 → -12,400 tokens</span><br>'; setBar('ctxBar','ctxPct',68,'var(--yellow)'); setBar('saveBar','savePct',12,'var(--accent)'); }],
+    [3700, () => { log.innerHTML += '<span class="dim">  [L2] Snip Compact 检查... (HISTORY_SNIP=off)</span><br>'; }],
+    [4100, () => { log.innerHTML += '<span class="ok">  → L2 已禁用，跳过</span><br>'; }],
+    [4500, () => { log.innerHTML += '<span class="dim">  [L3] Microcompact 检查...</span><br>'; }],
+    [4900, () => { log.innerHTML += '<span class="ok">  ✓ L3: Prompt Cache 感知清除 8 条工具结果 → -18,200 tokens</span><br>'; setBar('ctxBar','ctxPct',59,'var(--green)'); setBar('saveBar','savePct',30,'var(--accent)'); }],
+    [5500, () => { log.innerHTML += '<span class="ok">  ✓ Context 降至 118,000 tokens (59%) — 低于阈值</span><br>'; }],
+    [6000, () => { log.innerHTML += '<span class="dim">  [L4] Context Collapse 检查... — 已在阈值以下，跳过</span><br>'; }],
+    [6400, () => { log.innerHTML += '<span class="dim">  [L5] Auto-Compact 检查... — L3 已足够，不触发 LLM 摘要调用</span><br>'; }],
+    [7000, () => { log.innerHTML += '<span class="ok">✅ 压缩完成 — 节省 30,600 tokens，避免 1 次 LLM API 调用</span><br>'; setBar('saveBar','savePct',30,'var(--green)'); status.textContent = 'L3 sufficient — no API call'; }],
+    [7500, () => { log.innerHTML += '<span class="dim">继续 Turn 41...</span><br><span class="cursor-blink">▋</span>'; }],
+  ];
+
+  steps.forEach(([delay, fn]) => setTimeout(fn, delay));
+}
+
+/* ══════════════════════════════════════
+   DEMO 3: Permission Pipeline
+   ══════════════════════════════════════ */
+function resetPermDemo() {
+  document.getElementById('permLog').innerHTML = '<span class="dim">点击运行，观察权限管线执行...</span><br><span class="cursor-blink">▋</span>';
+  document.getElementById('permStatus').textContent = 'ready';
+}
+
+function runPermDemo() {
+  resetPermDemo();
+  const log = document.getElementById('permLog');
+  const status = document.getElementById('permStatus');
+
+  const steps = [
+    [100,  `<span class="dim">━━━ 工具调用请求开始 ━━━</span><br>`],
+    [500,  `<span class="ask">→ [1] FileReadTool {path: "src/main.java"}</span><br>`],
+    [800,  `<span class="dim">  ① Pre-filter: tool=FileRead ✓</span><br>`],
+    [1000, `<span class="dim">  ② PreToolUse Hook: 未配置，跳过</span><br>`],
+    [1200, `<span class="dim">  ③ Rule: allowList["/src/**"] 匹配 ✓</span><br>`],
+    [1400, `<span class="ok">  ✅ AUTO-APPROVE — isConcurrencySafe, 开始执行</span><br>`],
+    [1800, `<span class="ask">→ [2] GrepTool {pattern: "password"}</span><br>`],
+    [2100, `<span class="dim">  ① Pre-filter: tool=Grep ✓</span><br>`],
+    [2300, `<span class="dim">  ② PreToolUse Hook: security-scan.sh 运行...</span><br>`],
+    [2600, `<span class="warn">  ⚠ Hook 日志: 搜索敏感词 "password"，记录审计</span><br>`],
+    [2900, `<span class="ok">  ✅ AUTO-APPROVE — 已记录，允许执行</span><br>`],
+    [3300, `<span class="ask">→ [3] FileWriteTool {path: "config.properties"}</span><br>`],
+    [3600, `<span class="dim">  ① Pre-filter: tool=FileWrite ✓</span><br>`],
+    [3800, `<span class="dim">  ③ Rule: config.properties 未在 allowList 明确授权</span><br>`],
+    [4100, `<span class="warn">  ④ Permission Handler: 不确定操作 → 请求用户确认</span><br>`],
+    [4400, `<span class="ask">  ┌────────────────────────────────────┐</span><br>`],
+    [4500, `<span class="ask">  │ Claude 要写入 config.properties    │</span><br>`],
+    [4600, `<span class="ask">  │ [y] 允许  [n] 拒绝  [A] 永久允许  │</span><br>`],
+    [4700, `<span class="ask">  └────────────────────────────────────┘</span><br>`],
+    [5000, `<span class="ok">  用户选择: y → APPROVED</span><br>`],
+    [5400, `<span class="ask">→ [4] BashTool {cmd: "rm -rf ./temp"}</span><br>`],
+    [5700, `<span class="dim">  ① Pre-filter: tool=Bash ✓</span><br>`],
+    [5900, `<span class="dim">  ③ Rule: rm -rf 匹配高风险模式</span><br>`],
+    [6200, `<span class="warn">  ④ Permission Handler: 高危操作 → 强制确认</span><br>`],
+    [6500, `<span class="ok">  用户选择: y → APPROVED (temp目录已确认)</span><br>`],
+    [6900, `<span class="ask">→ [5] AgentTool {task: "分析日志", tools: ["Read","Grep"]}</span><br>`],
+    [7200, `<span class="dim">  ① Pre-filter: AgentTool ✓</span><br>`],
+    [7400, `<span class="dim">  ④ Permission: 派生子 Agent，继承过滤工具池</span><br>`],
+    [7700, `<span class="ok">  ✅ 子 Agent 启动 — 独立 context，只有 Read+Grep 权限</span><br>`],
+    [8200, `<span class="ok">━━━ 全部 5 个工具请求处理完毕 ━━━</span><br><span class="cursor-blink">▋</span>`],
+  ];
+
+  let html = '';
+  steps.forEach(([delay, text]) => {
+    setTimeout(() => {
+      html += text;
+      log.innerHTML = html;
+      log.parentElement.scrollTop = log.parentElement.scrollHeight;
+    }, delay);
+  });
+  setTimeout(() => status.textContent = 'running...', 100);
+  setTimeout(() => status.textContent = '5 tools processed', 8200);
+}
+
+/* ══════════════════════════════════════
+   DEMO 4: Multi-Agent Orchestration
+   ══════════════════════════════════════ */
+function resetAgentDemo() {
+  document.getElementById('agentLog').innerHTML = '<span class="dim">点击运行，观察 Orchestrator 如何派发子 Agent 并行工作...</span>';
+  document.getElementById('agentStatus').textContent = 'ready';
+}
+
+function runAgentDemo() {
+  resetAgentDemo();
+  const log = document.getElementById('agentLog');
+  const status = document.getElementById('agentStatus');
+
+  const steps = [
+    [100,  'main',  '▶ [Orchestrator] 用户请求: "全面审查这个 Java 微服务项目"'],
+    [600,  'main',  '  分析任务，拆解为 3 个并行子任务...'],
+    [1100, 'main',  '  派生子 Agent A: 代码结构分析'],
+    [1300, 'sub-a', '    [Sub-Agent A] 启动 | context: 独立 | tools: [Read, Glob, Grep]'],
+    [1500, 'main',  '  派生子 Agent B: 测试覆盖率分析'],
+    [1700, 'sub-b', '    [Sub-Agent B] 启动 | context: 独立 | tools: [Read, Bash]'],
+    [1900, 'main',  '  派生子 Agent C: 依赖安全扫描'],
+    [2100, 'sub-c', '    [Sub-Agent C] 启动 | context: 独立 | tools: [Read, Grep, Bash]'],
+    [2400, 'dim',   '  ─────── 三个 Agent 并行执行中 ───────'],
+    [2700, 'sub-a', '    [A] GlobTool: 扫描 src/**/*.java → 147 文件'],
+    [2900, 'sub-b', '    [B] BashTool: mvn test → 运行 234 测试...'],
+    [3100, 'sub-c', '    [C] BashTool: mvn dependency:check → 检查漏洞...'],
+    [3500, 'sub-a', '    [A] GrepTool: 分析设计模式 → 发现 Factory×3, Observer×2'],
+    [3800, 'sub-c', '    [C] GrepTool: CVE 数据库匹配...'],
+    [4200, 'sub-b', '    [B] 测试结果: 234 passed, 3 skipped | 覆盖率: 78.4%'],
+    [4600, 'sub-b', '  ✅ [Sub-Agent B] 完成 → 结果返回 Orchestrator'],
+    [5000, 'sub-c', '    [C] 发现 2 个低危漏洞: logback-classic:1.2.3, jackson:2.12.0'],
+    [5400, 'sub-c', '  ✅ [Sub-Agent C] 完成 → 结果返回 Orchestrator'],
+    [5800, 'sub-a', '    [A] 架构评估: 分层清晰，建议拆分 UserService (400行)'],
+    [6200, 'sub-a', '  ✅ [Sub-Agent A] 完成 → 结果返回 Orchestrator'],
+    [6700, 'main',  '  ─────── 汇总 3 个子 Agent 结果 ───────'],
+    [7100, 'main',  '  综合分析: 147文件 | 78.4%覆盖率 | 2个低危漏洞 | 建议重构1处'],
+    [7600, 'done',  '✅ 任务完成 | 3 sub-agents | 并行节省约 65% 时间'],
+    [8000, 'dim',   '   各子 Agent context 已销毁，sidechain transcripts 已归档'],
+  ];
+
+  const colorMap = { 'main':'main', 'sub-a':'sub-a', 'sub-b':'sub-b', 'sub-c':'sub-c', 'done':'done', 'dim':'dim' };
+  let html = '';
+  steps.forEach(([delay, cls, text]) => {
+    setTimeout(() => {
+      html += `<span class="${colorMap[cls]}">${text}</span><br>`;
+      log.innerHTML = html;
+      log.parentElement.scrollTop = log.parentElement.scrollHeight;
+    }, delay);
+  });
+  setTimeout(() => status.textContent = 'running...', 100);
+  setTimeout(() => status.textContent = '3 sub-agents complete', 8000);
+}
+</script>
+</body>
+</html>
