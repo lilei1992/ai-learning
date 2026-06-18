@@ -3,6 +3,8 @@
 > 创建日期：2026-06-01
 > 组织方式：每周一个目录，每天一个主题文件。
 > 原始汇总版：[`../ai-agent-runtime-daily-goals.md`](../ai-agent-runtime-daily-goals.md)
+> Week 02-08 工程路线：[`week-02-to-08-engineering-roadmap.md`](week-02-to-08-engineering-roadmap.md)
+> 学习含金量提升建议：[`learning-quality-suggestions.md`](learning-quality-suggestions.md)
 
 ## 使用方式
 
@@ -47,13 +49,13 @@
 | 周次 | 主题 | 目录 | 学习目标 |
 |------|------|------|----------|
 | Week 1 | Agent 基础模型 | [`week-01-agent-basics/README.md`](week-01-agent-basics/README.md) | 分清 Chat API、Workflow、Agent、Runtime，建立 AI Agent Runtime 的基础 mental model（心智模型）。 |
-| Week 2 | Agentic Loop 深入 | [`week-02-agentic-loop/README.md`](week-02-agentic-loop/README.md) | 理解 Agentic Loop（智能体主循环）的输入、执行、观察、停止和恢复机制。 |
-| Week 3 | Tool System 深入 | [`week-03-tool-system/README.md`](week-03-tool-system/README.md) | 掌握 Tool Interface（工具接口）、Input Schema（输入结构定义）、Tool Result（工具结果）和 Tool Scheduler（工具调度器）。 |
-| Week 4 | Context Management 深入 | [`week-04-context-management/README.md`](week-04-context-management/README.md) | 理解 Context Window（上下文窗口）、Context Pollution（上下文污染）、Context Compaction（上下文压缩）和 Memory Write Policy（记忆写入策略）。 |
-| Week 5 | Permission System 深入 | [`week-05-permission-system/README.md`](week-05-permission-system/README.md) | 理解 AI Action Authorization（AI 动作授权）、Permission Pipeline（权限管线）、Sandbox（沙箱）、Hooks（钩子）和 Audit Log（审计日志）。 |
-| Week 6 | MCP / Plugin / Extension | [`week-06-mcp-plugin-extension/README.md`](week-06-mcp-plugin-extension/README.md) | 理解 MCP（Model Context Protocol，模型上下文协议）、Plugin Architecture（插件架构）、Process Isolation（进程隔离）和 JSON-RPC（JSON 远程过程调用）。 |
-| Week 7 | Multi-Agent 深入 | [`week-07-multi-agent/README.md`](week-07-multi-agent/README.md) | 掌握 Multi-Agent（多智能体）的任务拆解、上下文隔离、结果汇总、成本控制和失败处理。 |
-| Week 8 | Evaluation 与工程落地 | [`week-08-evaluation-engineering/README.md`](week-08-evaluation-engineering/README.md) | 建立 Evaluation（评估）、Trace（链路记录）、Observability（可观测性）、Regression Test（回归测试）和落地设计能力。 |
+| Week 2 | Runtime 主循环实现 | [`week-02-agentic-loop/README.md`](week-02-agentic-loop/README.md) | 把 Agent Loop 落到 `AgentRuntime.run()` 主流程，理解上下文、模型、动作、观察、状态和停止。 |
+| Week 3 | Tool System 工程实现 | [`week-03-tool-system/README.md`](week-03-tool-system/README.md) | 掌握 Tool Schema、Tool Registry、Tool Result、权限、重试和审计。 |
+| Week 4 | Context Engineering 与 Memory | [`week-04-context-management/README.md`](week-04-context-management/README.md) | 掌握上下文组装、上下文污染、压缩、Memory 策略和 RAG。 |
+| Week 5 | State、Permission 与 Guardrails | [`week-05-permission-system/README.md`](week-05-permission-system/README.md) | 设计状态机、权限管线、人工审批、沙箱、护栏和审计日志。 |
+| Week 6 | Agent 架构模式与 MCP 扩展 | [`week-06-mcp-plugin-extension/README.md`](week-06-mcp-plugin-extension/README.md) | 掌握 ReAct、Plan-and-Execute、Router、Multi-Agent、Workflow+Agent 和 MCP 扩展。 |
+| Week 7 | AI Coding Agent 与企业内部 Agent | [`week-07-multi-agent/README.md`](week-07-multi-agent/README.md) | 理解 Coding Agent 原理，设计 Code Review、日志分析、SQL/ES、运维排障等企业 Agent MVP。 |
+| Week 8 | Evaluation、Observability 与实战项目设计 | [`week-08-evaluation-engineering/README.md`](week-08-evaluation-engineering/README.md) | 建立评估、Trace、回归测试、成本控制、技术选型和三个实战项目方案。 |
 
 ## 每日主题索引
 
